@@ -15,9 +15,9 @@
 
 import '../../src/ui/theme.js';
 import * as THREE from 'three';
-import { createStage } from '../../src/stage/stage.js';
+import { createStage, plasterMaterial } from '../../src/stage/stage.js';
 import { createBoard } from '../../src/stage/board.js';
-import { lineStyle } from '../../src/stage/lines.js';
+import { lineStyle, createLines } from '../../src/stage/lines.js';
 import { createFrame } from '../../src/ui/frame.js';
 import { createRedlines } from '../../src/ui/redline.js';
 import { createSession } from '../../src/ui/session.js';
@@ -33,7 +33,7 @@ import { PACKS } from './levels.js';
 const stage = createStage(document.getElementById('stage'));
 const frame = createFrame({ game: 'roof', name: 'Roof Plans', stage });
 const red = createRedlines(stage);
-const cardEl = frame.card;
+frame.stack(true);
 
 // ------------------------------------------------------------------
 // small helpers
@@ -91,7 +91,6 @@ function legendHTML() {
 
 function openCard(title, note, { interactive = false } = {}) {
   const body = frame.card(true, title, note);
-  frame.card.el?.classList?.add('is-plan');
   document.querySelector('.udp-card').classList.add('is-plan');
   body.replaceChildren();
   const holder = document.createElement('div');
@@ -161,7 +160,10 @@ function addModel(roof, opts) {
   stage.invalidate();
   return m;
 }
-function frameModel(m, padding = 40) { stage.frame(m.box(), { padding }); }
+function frameModel(m, padding = null) {
+  const r = stage.rect;
+  stage.frame(m.box(), { padding: padding ?? Math.max(8, Math.min(64, Math.min(r.w, r.h) * .1)) });
+}
 
 // the roof rises from a flat lid to its pitch
 function raise(m, to = m.pitch, duration = 1100) {
@@ -371,7 +373,7 @@ function nameTask(item, roof) {
   const cycle = i => set(i, ORDER[(ORDER.indexOf(named[i]) + 1) % 3]);
   function refresh() {
     const done = named.filter(Boolean).length;
-    frame.sub(`Tap a line to name it: ridge, hip, valley, and round again. Or point at it and press <em>R</em>, <em>H</em> or <em>V</em>. ${done} of ${lines.length} named.${show ? '' : ' There is no model to look at: read it from the plan.'}`, true);
+    frame.sub(`Tap a line to name it: ridge, hip, valley, and round again. Or point at it and press <em>1</em> ridge, <em>2</em> hip, <em>3</em> valley. ${done} of ${lines.length} named.${show ? '' : ' There is no model to look at: read it from the plan.'}`, true);
     frame.primary({ label: 'Check', run: () => session.check(), disabled: done < lines.length, ready: done === lines.length });
   }
 
@@ -380,11 +382,10 @@ function nameTask(item, roof) {
   frame.title(TITLES.name, item.name);
   frame.tools([{ id: 'hint', label: 'Hint', key: 'H', run: () => session.hint() }]);
   frame.keys([
-    { key: 'R', label: 'Name the line under the pointer a ridge', run: () => hover !== null && set(hover, 'ridge') },
-    { key: 'H', run: () => session.hint() },
-    { key: 'V', label: 'Name the line under the pointer a valley', run: () => hover !== null && set(hover, 'valley') },
+    { key: '1', label: 'The line under the pointer is a ridge', run: () => hover !== null && set(hover, 'ridge') },
+    { key: '2', label: 'The line under the pointer is a hip', run: () => hover !== null && set(hover, 'hip') },
+    { key: '3', label: 'The line under the pointer is a valley', run: () => hover !== null && set(hover, 'valley') },
   ]);
-  frame.keys([{ key: 'I', label: 'Name the line under the pointer a hip', run: () => hover !== null && set(hover, 'hip') }]);
   viewKeys();
   refresh();
 
@@ -527,7 +528,7 @@ function drawTask(item, roof, { construct = false } = {}) {
 function editorTask(item, { workshop = false } = {}) {
   const [w, h] = item.size || [10, 8];
   let cells = new Set(item.start || []);
-  let model = null, pitch = .75, rain = null;
+  let model = null, pitch = 1, rain = null;
   const centre = [w * S / 2, h * S / 2];
   const board = openCard(workshop ? 'Site' : 'Site', `${w} × ${h} modules`, { interactive: true });
   for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) {
@@ -537,8 +538,9 @@ function editorTask(item, { workshop = false } = {}) {
   board.fit();
 
   // the site edge on the ground, so the camera frames the whole site
+  const site = siteModel(w, h);
   const siteBox = new THREE.Box3(new THREE.Vector3(-w / 2, -h / 2, 0), new THREE.Vector3(w / 2, h / 2, 2.6));
-  stage.frame(siteBox, { padding: 36 });
+  stage.frame(siteBox, { padding: Math.max(8, Math.min(36, Math.min(stage.rect.w, stage.rect.h) * .06)) });
 
   let stats = null, valid = false;
   function rebuild() {
@@ -562,12 +564,12 @@ function editorTask(item, { workshop = false } = {}) {
   function refresh() {
     if (workshop) {
       const s = stats;
-      frame.sub(s ? `${plural(s.modules, 'module')} · ${plural(s.valleys, 'valley')} · ${plural(s.hips, 'hip')} · ${s.ridges === 1 ? 'one ridge' : plural(s.ridges, 'ridge')} · highest ridge ${s.height} up${s.courtyards ? ' · a courtyard' : ''}`
+      frame.sub(s ? `${plural(s.modules, 'module')} · ${plural(s.valleys, 'valley')} · ${plural(s.hips, 'hip')} · ${s.ridges === 1 ? 'one ridge' : plural(s.ridges, 'ridge')} · ridge ${s.height} ${s.height === 1 ? 'module' : 'modules'} up${s.courtyards ? ' · a courtyard' : ''}`
         : cells.size ? 'That footprint cannot carry one roof: every block must touch the next along a whole side.' : 'Paint a footprint on the site: drag over the cells. The roof grows over it as you go.');
       return;
     }
     const m = meets(cells, item.brief);
-    const list = m.map(x => `<span class="rf-brief${x.ok ? ' is-ok' : ''}">${x.ok ? '◆' : '◇'} ${x.text}</span>`).join(' ');
+    const list = m.map(x => `<span class="rf-brief${x.ok ? ' is-ok' : ''}"><i>${x.ok ? '◆' : '◇'}</i>${x.text}</span>`).join(' ');
     const all = m.every(x => x.ok);
     frame.sub(`Paint a footprint on the site whose roof has ${list}${cells.size && !valid ? '<br><em>Every block must touch the next along a whole side.</em>' : ''}`, true);
     frame.primary({ label: 'Submit', run: () => session.check(), disabled: !cells.size, ready: all });
@@ -647,8 +649,24 @@ function editorTask(item, { workshop = false } = {}) {
       return { text: 'One footprint that meets the brief is marked on the site.' };
     },
     solved: () => finale(model),
-    dispose() { offPaint(); rain?.dispose(); board.dispose(); closeCard(); model?.dispose(); },
+    dispose() { offPaint(); rain?.dispose(); board.dispose(); closeCard(); model?.dispose(); site.dispose(); },
   };
+}
+
+// the site in 3D: a thin plaster plate with the module grid scored into it
+function siteModel(w, h) {
+  const group = new THREE.Group();
+  const t = .04;
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(w + .6, h + .6, t), plasterMaterial({ color: 0x8f8a82 }));
+  plate.position.z = -t / 2 + .001;
+  plate.receiveShadow = true;
+  const segs = [];
+  for (let i = 0; i <= w; i++) segs.push([[i - w / 2, -h / 2, .003], [i - w / 2, h / 2, .003]]);
+  for (let j = 0; j <= h; j++) segs.push([[-w / 2, j - h / 2, .003], [w / 2, j - h / 2, .003]]);
+  const grid = createLines(segs, 'guide');
+  group.add(plate, grid);
+  stage.content.add(group);
+  return { group, dispose() { grid.dispose(); plate.geometry.dispose(); plate.material.dispose(); group.removeFromParent(); } };
 }
 
 // ------------------------------------------------------------------

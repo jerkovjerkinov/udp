@@ -84,6 +84,7 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
   // ------------------------------------------------------------------
 
   let reserve = { left: 0, right: 0 };                   // extra px a game keeps free at the sides
+  let stacked = false;                                   // true: the model sits under the title, never beside it
   function freeRect() {
     const W = window.innerWidth, H = window.innerHeight;
     const phone = W <= 820;
@@ -98,7 +99,7 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
     }
     // on a wide screen the title column sits beside the model, not above it
     let y0 = top;
-    if (!phone && W > 1100) {
+    if (!phone && W > 1100 && !stacked) {
       y0 = Math.max(sb.bottom + 8, 72);
       left = Math.max(left, hb.right + 16);
       if (left > W * .42) { left = 0; y0 = top; }
@@ -277,6 +278,8 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
     cardNote(note) { card.querySelector('.ck-note').textContent = note; },
     // keep extra space free beside the model (px)
     reserve(r) { reserve = { left: 0, right: 0, ...r }; layout(); },
+    // keep the model under the title column instead of beside it (a wide side card)
+    stack(v = true) { stacked = v; layout(); },
     freeRect, layout,
     hide(v = true) { root.classList.toggle('is-hidden', v); },
     onMap(fn) { handlers.map = fn; },

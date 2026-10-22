@@ -22,7 +22,7 @@ export const GAMES = [
   { id: 'origamic', prefix: 'O', family: 'Sheet', name: 'Origamic', blurb: 'Cut and crease one sheet so that it stands up as a building when the card opens.', ready: false },
   { id: 'developments', prefix: 'D', family: 'Solid', name: 'Developments', blurb: 'Cut solids open into nets, match the edges that glue, fold nets in your head.', ready: true },
   { id: 'stack', prefix: 'S', family: 'Solid', name: 'Stack', blurb: 'Build the solid that three orthographic views describe, block by block.', ready: false },
-  { id: 'roof', prefix: 'R', family: 'Building', name: 'Roof Plans', blurb: 'Grow roofs from footprints, read hips and valleys, and drain the rain.', ready: false },
+  { id: 'roof', prefix: 'R', family: 'Building', name: 'Roof Plans', blurb: 'Grow roofs from footprints, read hips and valleys, and drain the rain.', ready: true },
   { id: 'buildorder', prefix: 'B', family: 'Building', name: 'Build Order', blurb: 'Put a building together in the order it can actually stand up.', ready: false },
 ];
 const FAMILIES = [

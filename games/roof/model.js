@@ -28,14 +28,14 @@ export const WALL_H = .9;
 
 /**
  * createRoofModel(roof, opts)
- *   pitch (.75)   rise per module of run when fully up
+ *   pitch (1)     rise per module of run when fully up (45 degrees)
  *   rise (1)      0..1 of the pitch to start at
  *   centre        sheet point at the world origin (default: the roof's middle)
  *   creases       'kind' (line types), 'plain' (all alike: Name the lines) or 'none'
  */
 export function createRoofModel(roof, opts = {}) {
   const wallH = opts.wallH ?? WALL_H;
-  let pitch = opts.pitch ?? .75;
+  let pitch = opts.pitch ?? 1;
   let k = pitch * (opts.rise ?? 1);
   const [cx, cy] = opts.centre || [roof.at[0] + roof.w * S / 2, roof.at[1] + roof.h * S / 2];
   const group = new THREE.Group();
