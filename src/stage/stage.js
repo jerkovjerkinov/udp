@@ -40,9 +40,13 @@ export function plasterMaterial(opts = {}) {
 }
 
 // a matte ground whose alpha falls off with distance from a centre (uniforms
-// fadeCentre, fadeR0, fadeR1 in world units)
+// fadeCentre, fadeR0, fadeR1 in world units). It is drawn first, in the opaque
+// pass, blended by hand and writing no depth, so it can never cover a model
+// lying on it (zoomed far out, a model's polygon offset reaches below z = -.03)
 function groundMaterial() {
-  const m = new THREE.MeshStandardMaterial({ color: MONOLIT.ground, roughness: 1, metalness: 0, transparent: true, depthWrite: false });
+  const m = new THREE.MeshStandardMaterial({ color: MONOLIT.ground, roughness: 1, metalness: 0, transparent: false, depthWrite: false,
+    blending: THREE.CustomBlending, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+    blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor });
   const u = { fadeCentre: { value: new THREE.Vector2() }, fadeR0: { value: 8 }, fadeR1: { value: 22 } };
   m.userData.fade = u;
   m.onBeforeCompile = (sh) => {
