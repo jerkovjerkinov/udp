@@ -95,29 +95,30 @@ function segDist(q, a, b) {
 // ------------------------------------------------------------------
 export function flatSheet(n) {
   const sq = [[0, 0], [n, 0], [n, n], [0, n]];
-  return { n, facets: [{ poly: sq, M: IDENTITY, z: 0 }], outline: sq };
+  return { n, folds: 0, facets: [{ poly: sq, M: IDENTITY, z: 0, hist: 0 }], outline: sq };
 }
 
 // Fold the side `moving` (+1 or -1, see sideOf) of the line over onto the other.
+// Every facet keeps its fold history: bit k is set if fold k turned it over.
 // Returns the new sheet and what is needed to animate it: the pieces that moved
 // and where in the stack each came from.
 export function fold(sheet, ln, moving) {
-  const R = reflection(ln);
+  const R = reflection(ln), k = sheet.folds || 0;
   const stay = [], move = [];
   let zTop = 0;
   for (const f of sheet.facets) zTop = Math.max(zTop, f.z);
   for (const f of sheet.facets) {
     const cur = f.poly.map(p => apply(f.M, p)), inv = invert(f.M);
     const keep = clip(cur, ln, -moving), go = clip(cur, ln, moving);
-    if (keep.length > 2 && area(keep) > 1e-7) stay.push({ poly: keep.map(p => apply(inv, p)), M: f.M, z: f.z });
-    if (go.length > 2 && area(go) > 1e-7) move.push({ poly: go.map(p => apply(inv, p)), M: compose(R, f.M), zPre: f.z });
+    if (keep.length > 2 && area(keep) > 1e-7) stay.push({ poly: keep.map(p => apply(inv, p)), M: f.M, z: f.z, hist: f.hist || 0 });
+    if (go.length > 2 && area(go) > 1e-7) move.push({ poly: go.map(p => apply(inv, p)), M: compose(R, f.M), zPre: f.z, hist: (f.hist || 0) | 1 << k });
   }
   // the stack that turns over lands upside down on top: its bottom layer ends highest
   let zMove = 0;
   for (const m of move) zMove = Math.max(zMove, m.zPre);
   for (const m of move) m.z = zTop + 1 + (zMove - m.zPre);
   return {
-    sheet: { n: sheet.n, facets: [...stay, ...move], outline: clip(sheet.outline, ln, -moving) },
+    sheet: { n: sheet.n, folds: k + 1, facets: [...stay, ...move], outline: clip(sheet.outline, ln, -moving) },
     step: { line: ln, moving, R, moved: move.length },          // the moved facets are the last `moved`
   };
 }
@@ -151,6 +152,17 @@ export function holesAt(sheet, q) {
   }
   return out;
 }
+
+// The folds a punch through these layers makes count: fold k counts when some of
+// the layers were turned over by it and some were not, so the punch goes through
+// both sides of that crease. A bit mask over the folds.
+export function foldsUsed(facets) {
+  let or = 0, and = -1;
+  for (const f of facets) { or |= f.hist || 0; and &= f.hist || 0; }
+  return facets.length ? or & ~and : 0;
+}
+export const facetsAt = (sheet, q) => sheet.facets.filter(f => insideBy(f.poly.map(p => apply(f.M, p)), q) > 1e-6);
+export const allFolds = sheet => (1 << (sheet.folds || 0)) - 1;
 
 // is q clear of every crease and edge by at least m?
 export function clearOfEdges(sheet, q, m) {
@@ -191,12 +203,20 @@ export function randomFolding(rng, { n = 6, folds = 2, diagonals = false, punche
     for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
       const q = [i + .5, j + .5];
       if (insideBy(sheet.outline, q) < .3 || !clearOfEdges(sheet, q, .22)) continue;
-      spots.push({ q, layers: holesAt(sheet, q).length });
+      const under = facetsAt(sheet, q);
+      spots.push({ q, layers: under.length, used: foldsUsed(under) });
     }
     if (spots.length < punches) continue;
-    const most = Math.max(...spots.map(s => s.layers));
-    const good = spots.filter(s => s.layers >= Math.min(most, 2));
-    const chosen = shuffle(rng, good.length >= punches ? good : spots).slice(0, punches);
+    // every fold must count: together the punches go through both sides of every crease
+    const full = allFolds(sheet);
+    const sets = [];
+    const pickSets = (from, set, mask) => {
+      if (set.length === punches) { if (mask === full) sets.push(set); return; }
+      for (let i = from; i < spots.length; i++) pickSets(i + 1, [...set, spots[i]], mask | spots[i].used);
+    };
+    if (punches) pickSets(0, [], 0);
+    if (punches && !sets.length) continue;
+    const chosen = punches ? shuffle(rng, sets[randInt(rng, sets.length)]) : [];
     const holes = [];
     for (const s of chosen) for (const h of holesAt(sheet, s.q)) holes.push([Math.floor(h[0]), Math.floor(h[1])]);
     const keys = new Set(holes.map(([i, j]) => i + ',' + j));

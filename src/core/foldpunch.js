@@ -14,7 +14,7 @@
 //
 // Every question is deterministic for a given rng.
 
-import { apply, invert, compose, clip, area, centroid2, line, sideOf, fold, flatSheet, candidateFolds, holesAt, clearOfEdges, insideBy, randomFolding, det, diagonal } from './paper.js';
+import { apply, invert, compose, clip, area, centroid2, line, sideOf, fold, flatSheet, candidateFolds, holesAt, clearOfEdges, insideBy, randomFolding, det, diagonal, foldsUsed, allFolds } from './paper.js';
 import { randInt, pick, shuffle } from './rand.js';
 
 // ------------------------------------------------------------------
@@ -122,6 +122,16 @@ export function holesOf(sheet, parts) {
   return out;
 }
 
+// the layers a punch with these parts goes through
+export function facetsUnder(sheet, parts) {
+  return sheet.facets.filter(f => {
+    const cur = f.poly.map(p => apply(f.M, p));
+    return parts.some(P => { const X = intersect(P, cur); return X.length > 2 && area(X) > 1e-4; });
+  });
+}
+// does every fold count for this punch or cut? (see paper.js foldsUsed)
+export const everyFoldCounts = (sheet, parts) => foldsUsed(facetsUnder(sheet, parts)) === allFolds(sheet);
+
 // what a punch takes out, in current coordinates, layer by layer (the falling discs)
 export function chipsOf(sheet, parts) {
   const out = [];
@@ -214,6 +224,7 @@ export function shapeQuestion(rng, { n = 4, folds = 2, diagonals = false, shape 
     const frames = [[[1, 0], [0, 1]], [[0, 1], [-1, 0]], [[-1, 0], [0, -1]], [[0, -1], [1, 0]]];
     const fr = frames[turn];
     const parts = shapeAt(shape, p, fr);
+    if (!everyFoldCounts(sheet, parts)) continue;
     const correct = holesOf(sheet, parts);
     if (correct.length < 2) continue;
     const bad = wrongs(rng, n, q.steps, sheet, parts, p, correct);
@@ -253,6 +264,7 @@ export function cutQuestion(rng, { n = 4, folds = 2, diagonals = false, shape = 
     const parts = shapeAt(shape, at, [fu, fv]);
     // the cut must stay on the paper away from the other edges
     if (parts.some(P => P.some(p => insideBy(sheet.outline, p) < -.6))) continue;
+    if (!everyFoldCounts(sheet, parts)) continue;
     const correct = holesOf(sheet, parts);
     if (correct.length < 2) continue;
     const bad = wrongs(rng, n, q.steps, sheet, parts, at, correct);

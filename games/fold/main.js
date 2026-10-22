@@ -76,9 +76,12 @@ function openCard(title, note, { interactive = false } = {}) {
 function closeCard() { frame.card(false); document.querySelector('.udp-card').classList.remove('is-plan'); }
 
 // an open sheet on the board at offset off: paper, cell grid, holes
+const PAPER = '#d6d1c6';
 function drawSheet(board, n, { off = [0, 0], id = 's', holes = [], grid = true, creases = [] } = {}) {
   const o = p => [p[0] + off[0], p[1] + off[1]];
-  board.polygon([o([0, 0]), o([n, 0]), o([n, n]), o([0, n])], { fill: 'face', stroke: 'visible', id: id + 'paper', hit: false });
+  // a sheet with holes is drawn as paper, opaque, so the holes read the same on any part of the background
+  const paper = holes.length > 0;
+  board.polygon([o([0, 0]), o([n, 0]), o([n, n]), o([0, n])], { fill: paper ? PAPER : 'face', stroke: 'visible', id: id + 'paper', hit: false });
   if (grid) for (let k = 1; k < n; k++) {
     board.line(o([k, 0]), o([k, n]), 'guide', { id: `${id}gx${k}`, hit: false });
     board.line(o([0, k]), o([n, k]), 'guide', { id: `${id}gy${k}`, hit: false });
@@ -288,7 +291,7 @@ function pickTask(item, q) {
     if (i === hoverOpt || chosen >= 0) return;
     if (hoverOpt >= 0 && !q.options[hoverOpt].out) board.update('opt' + hoverOpt, { fill: 'none' });
     hoverOpt = i;
-    if (i >= 0 && !q.options[i].out) board.update('opt' + i, { fill: 'ghost' });
+    if (i >= 0 && !q.options[i].out) board.update('opt' + i, { fill: 'rgba(15, 15, 14, .16)' });
   };
   board.el.addEventListener('pointermove', move);
 

@@ -1,5 +1,6 @@
 // node tests/core/foldpunch.test.mjs — Fold & Punch questions and level data
-import { holesQuestion, shapeQuestion, cutQuestion, reverseTarget, piecesOf, subtract, intersect, area, holesOf, shapeAt, replay, shapeSignature, punchCells, flatSheet, fold, line } from '../../src/core/foldpunch.js';
+import { holesQuestion, shapeQuestion, cutQuestion, reverseTarget, piecesOf, subtract, intersect, area, holesOf, shapeAt, replay, shapeSignature, punchCells, flatSheet, fold, line, everyFoldCounts } from '../../src/core/foldpunch.js';
+import { foldsUsed, facetsAt, allFolds } from '../../src/core/paper.js';
 import { seededRng } from '../../src/core/rand.js';
 import { PACKS } from '../../games/fold/levels.js';
 
@@ -29,6 +30,10 @@ for (const pk of PACKS) for (const l of pk.levels) {
     ok(q.options.length === 4 && q.options.filter(x => x.ok).length === 1, l.id + ' four options, one right');
     ok(new Set(q.options.map(x => shapeSignature(x.holes))).size === 4, l.id + ' options differ');
   }
+  // no fold is wasted: the punches (or the cut) go through both sides of every crease
+  const fin = (q.states || q.solution.states).at(-1), pun = q.solution ? q.solution.punches : q.punches;
+  const counts = q.parts && l.task !== 'holes' ? everyFoldCounts(fin, q.parts) : pun.reduce((m, p) => m | foldsUsed(facetsAt(fin, p)), 0) === allFolds(fin);
+  ok(counts && fin.folds === l.folds, l.id + ' every fold counts');
   if (l.task === 'holes') ok(q.holes.length >= 2, l.id + ' at least two holes');
   if (l.task === 'reverse') {
     // the stored solution makes the target
