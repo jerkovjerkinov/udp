@@ -121,6 +121,7 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
     { key: '?', label: 'Show or hide this legend' },
     { key: 'M', label: 'Sound on or off' },
     { key: 'Esc', label: 'Level map' },
+    { key: 'PgDn / PgUp', label: 'Next or previous level (while every level is open)' },
   ];
   function renderLegend() {
     const rows = [...keys, ...fixedKeys].filter(k => k.key && k.label);

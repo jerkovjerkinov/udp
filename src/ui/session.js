@@ -29,7 +29,7 @@ import { clock, esc } from './frame.js';
 import { titleBlock } from './titleblock.js';
 import { createLevelMap, sheetNo } from './levelmap.js';
 import { parseHash, formatHash, newSeed, shareLine, copyText } from './share.js';
-import { loadProgress, saveProgress, recordLevel, marksOf, nextLevel, packStates,
+import { loadProgress, saveProgress, recordLevel, marksOf, nextLevel, packStates, ALL_OPEN,
   loadSuite, saveSuite, today, recordDaily, currentStreak } from './progress.js';
 import { seededRng } from '../core/rand.js';
 
@@ -231,6 +231,17 @@ export function createSession({ def, frame, stage, redlines }) {
     run = null;
     begin({ ...f.level, kind: 'level', sheet: sheetNo(f.pack.id, f.i), pack: f.pack.id, index: f.i });
   }
+
+  // skipping (while every pack is open): Page Down / Page Up step through the levels
+  const allIds = def.packs.flatMap(pk => pk.levels.map(l => l.id));
+  document.addEventListener('keydown', ev => {
+    if (!ALL_OPEN || mode !== 'pack' || !item || map.isOn || checking) return;
+    if (ev.key !== 'PageDown' && ev.key !== 'PageUp') return;
+    const i = allIds.indexOf(item.id) + (ev.key === 'PageDown' ? 1 : -1);
+    if (i < 0 || i >= allIds.length) return;
+    ev.preventDefault();
+    playLevel(allIds[i]);
+  });
 
   function generated(kind, rng, difficulty, extra) {
     return { ...def.generate(rng, difficulty, extra.i ?? 0), kind, difficulty, ...extra };

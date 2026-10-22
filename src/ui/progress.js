@@ -41,9 +41,13 @@ export function grade(earned, possible) {
   return k >= .9 ? 'A' : k >= .6 ? 'B' : 'C';
 }
 
+// While the suite is in development every pack is open, so any level can be
+// played straight away. Set to false to bring back the unlocking order.
+export const ALL_OPEN = true;
+
 // per pack: { open, done, solved, marks, grade, next } — a pack opens when the
 // one before it is finished (every level solved); the first is always open
-export function packStates(p, packs) {
+export function packStates(p, packs, { allOpen = ALL_OPEN } = {}) {
   const out = [];
   let prevDone = true;
   for (const pk of packs) {
@@ -51,7 +55,7 @@ export function packStates(p, packs) {
     const nSolved = ids.filter(id => solved(p, id)).length;
     const marks = ids.reduce((n, id) => n + marksOf(p, id).filter(Boolean).length, 0);
     const done = nSolved === ids.length;
-    const open = prevDone || nSolved > 0;
+    const open = allOpen || prevDone || nSolved > 0;
     out.push({ id: pk.id, open, done, solved: nSolved, total: ids.length, marks, grade: nSolved ? grade(marks, ids.length * 3) : null, next: ids.find(id => !solved(p, id)) || null });
     prevDone = done;
   }
