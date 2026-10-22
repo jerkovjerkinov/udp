@@ -1,0 +1,287 @@
+// The game page chrome, as on the MONOLIT reference sheet: a brand line and a
+// large light title with the object's name in bold at the top left, the sheet
+// number, timer, par and marks at the top right, text buttons along the bottom
+// with a thin progress rule and the one primary action, and a side card for a
+// 2D drawing. No boxes: rules, tracked capitals and the signal colour.
+//
+// The 3D view fills the page behind all this. The frame works out which part
+// of the screen its own text leaves free and hands that rect to the stage, so
+// models are framed where nothing covers them.
+//
+//   const frame = createFrame({ game: 'developments', name: 'Developments', stage });
+//   frame.title('Cut it open.', 'Gable house');
+//   frame.tools([{ id: 'undo', label: 'Undo', key: 'Z', run: undo }]);
+//   frame.primary({ label: 'Unfold', run: check });
+
+import { sfx } from '../fx/sfx.js';
+
+const h = (tag, cls, html) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html !== undefined) e.innerHTML = html;
+  return e;
+};
+export const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// ◆◆◇: n earned of total, the ones in fresh (indices) drawn in the signal colour
+export function marksHTML(earned = [], fresh = []) {
+  return [0, 1, 2].map(i => `<i class="${earned[i] ? '' : 'is-open'}${fresh.includes(i) ? ' is-new' : ''}">${earned[i] ? '◆' : '◇'}</i>`).join('');
+}
+
+export const clock = s => {
+  s = Math.max(0, Math.floor(s));
+  return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+};
+
+/**
+ * createFrame({ game, name, stage, hubHref })
+ *   game: id ('developments'), name: shown in the brand line, stage: from createStage
+ */
+export function createFrame({ game, name, stage, hubHref = '../../index.html' }) {
+  document.body.classList.add('udp-app-page');
+  const root = h('div', 'udp-frame');
+
+  const head = h('header', 'udp-head');
+  head.innerHTML = `<nav class="udp-brand"><a href="${hubHref}"><span class="udp-long">Unnamed Drawing Project</span><span class="udp-short" hidden>UDP</span></a><span class="udp-sep">·</span><a href="#map" data-act="map">${esc(name)}</a></nav>
+    <h1 class="udp-title"></h1><p class="udp-sub"></p><p class="udp-msg" aria-live="polite"></p>`;
+  const elTitle = head.querySelector('.udp-title'), elSub = head.querySelector('.udp-sub'), elMsg = head.querySelector('.udp-msg');
+
+  const stat = h('div', 'udp-stat');
+  stat.innerHTML = `<div class="udp-stat-top"><span class="udp-sheet-no"></span><span class="st-label"></span></div>
+    <div class="udp-timer" aria-label="time">00:00</div>
+    <div class="udp-stat-bot"><span class="st-par"></span><span class="udp-dot">·</span><span class="udp-marks"></span></div>
+    <span class="udp-delta"></span>`;
+  const elSheet = stat.querySelector('.udp-sheet-no'), elLabel = stat.querySelector('.st-label');
+  const elTimer = stat.querySelector('.udp-timer'), elPar = stat.querySelector('.st-par');
+  const elMarks = stat.querySelector('.udp-marks'), elDelta = stat.querySelector('.udp-delta');
+  const elDot = stat.querySelector('.udp-dot');
+
+  const card = h('section', 'udp-card');
+  card.hidden = true;
+  card.innerHTML = `<div class="udp-card-k"><span class="udp-k ck-title"></span><span class="udp-k ck-note"></span></div><div class="udp-card-body"></div>`;
+
+  const bar = h('nav', 'udp-bar');
+  bar.innerHTML = `<div class="udp-bar-tools"></div><div class="udp-rule" hidden><i></i><b></b></div>
+    <div class="udp-run" hidden><span class="rn-text"></span><span class="udp-strikes"></span></div>
+    <div class="udp-bar-end"><div class="udp-util">
+      <button class="udp-btn" data-act="sound" aria-pressed="false"></button>
+      <button class="udp-btn" data-act="keys" title="Keyboard (?)">?</button>
+      <button class="udp-btn" data-act="map">Levels</button>
+    </div><button class="udp-primary"></button></div>`;
+  const elTools = bar.querySelector('.udp-bar-tools'), elRule = bar.querySelector('.udp-rule');
+  const elRun = bar.querySelector('.udp-run'), elPrimary = bar.querySelector('.udp-primary');
+  const elSound = bar.querySelector('[data-act=sound]');
+
+  root.append(head, stat, card, bar);
+  document.body.appendChild(root);
+
+  const legend = h('aside', 'udp-legend');
+  const veil = h('div', 'udp-legend-veil');
+  document.body.append(veil, legend);
+
+  // ------------------------------------------------------------------
+  // the free rect for 3D content
+  // ------------------------------------------------------------------
+
+  let reserve = { left: 0, right: 0 };                   // extra px a game keeps free at the sides
+  function freeRect() {
+    const W = window.innerWidth, H = window.innerHeight;
+    const phone = W <= 820;
+    const hb = head.getBoundingClientRect(), sb = stat.getBoundingClientRect(), bb = bar.getBoundingClientRect();
+    const top = Math.max(hb.bottom, sb.bottom) + (phone ? 4 : 8);
+    let bottom = bb.top - (phone ? 4 : 12);
+    let left = phone ? 0 : 0, right = W;
+    if (!card.hidden) {
+      const cb = card.getBoundingClientRect();
+      if (phone) bottom = Math.min(bottom, cb.top - 4);
+      else right = Math.min(right, cb.left - 24);
+    }
+    // on a wide screen the title column sits beside the model, not above it
+    let y0 = top;
+    if (!phone && W > 1100) {
+      y0 = Math.max(sb.bottom + 8, 72);
+      left = Math.max(left, hb.right + 16);
+      if (left > W * .42) { left = 0; y0 = top; }
+    }
+    left += reserve.left; right -= reserve.right;
+    return { x: left, y: y0, w: Math.max(80, right - left), h: Math.max(80, bottom - y0) };
+  }
+  function layout() { stage?.setRect(freeRect()); }
+  const ro = new ResizeObserver(() => layout());
+  for (const el of [head, stat, card, bar]) ro.observe(el);
+  window.addEventListener('resize', layout);
+
+  // ------------------------------------------------------------------
+  // keys
+  // ------------------------------------------------------------------
+
+  let keys = [];                                          // [{ key, label, run }]
+  const fixedKeys = [
+    { key: '?', label: 'Show or hide this legend' },
+    { key: 'M', label: 'Sound on or off' },
+    { key: 'Esc', label: 'Level map' },
+  ];
+  function renderLegend() {
+    const rows = [...keys, ...fixedKeys].filter(k => k.key && k.label);
+    legend.innerHTML = `<span class="udp-k">Keyboard</span><dl>${rows.map(k => `<dt>${esc(k.key)}</dt><dd>${esc(k.label)}</dd>`).join('')}</dl>`;
+  }
+  function toggleLegend(on) {
+    const v = on ?? !legend.classList.contains('is-on');
+    renderLegend();
+    legend.classList.toggle('is-on', v); veil.classList.toggle('is-on', v);
+  }
+  veil.addEventListener('click', () => toggleLegend(false));
+
+  const handlers = { map: () => {}, primary: null };
+  document.addEventListener('keydown', ev => {
+    if (ev.target.closest && ev.target.closest('input, textarea, select')) return;
+    if (ev.metaKey || ev.altKey) return;
+    if (ev.key === '?') { toggleLegend(); ev.preventDefault(); return; }
+    if (ev.key === 'Escape') {
+      if (legend.classList.contains('is-on')) { toggleLegend(false); return; }
+      handlers.map(); return;
+    }
+    if (ev.ctrlKey && ev.key.toLowerCase() !== 'z') return;
+    if (ev.key.toLowerCase() === 'm' && !ev.ctrlKey) { setSound(!sfx.muted); return; }
+    if (ev.key === 'Enter' && handlers.primary && !elPrimary.disabled) { ev.preventDefault(); handlers.primary(); return; }
+    const k = ev.ctrlKey ? 'Ctrl+' + ev.key.toUpperCase() : ev.key.length === 1 ? ev.key.toUpperCase() : ev.key;
+    const hit = keys.find(x => x.run && (x.key === k || (x.keys && x.keys.includes(k))));
+    if (hit) { ev.preventDefault(); hit.run(ev); }
+  });
+
+  function setSound(on) {
+    sfx.setMuted(!on);
+    renderSound();
+    if (on) sfx.snap();
+  }
+  function renderSound() {
+    elSound.textContent = sfx.muted ? 'Sound off' : 'Sound on';
+    elSound.setAttribute('aria-pressed', String(!sfx.muted));
+    elSound.classList.toggle('is-on', !sfx.muted);
+  }
+  renderSound();
+
+  root.addEventListener('click', ev => {
+    const b = ev.target.closest('[data-act]');
+    if (!b) return;
+    const act = b.dataset.act;
+    if (act === 'sound') setSound(sfx.muted);
+    else if (act === 'keys') toggleLegend();
+    else if (act === 'map') { ev.preventDefault(); handlers.map(); }
+  });
+  elPrimary.addEventListener('click', () => handlers.primary?.());
+
+  // ------------------------------------------------------------------
+  // public
+  // ------------------------------------------------------------------
+
+  let msgTimer = 0;
+  const frame = {
+    root, head, stat, card, bar, legend,
+    // title: a light lead line and a bold object name
+    title(lead, name) {
+      elTitle.innerHTML = `${esc(lead)}${name ? `<b>${esc(name)}</b>` : ''}`;
+      layout();
+    },
+    // sub text: plain text, or HTML when html is true (use <em> for the signal colour)
+    sub(text, html = false) { elSub[html ? 'innerHTML' : 'textContent'] = text || ''; layout(); },
+    // a short italic message under the sub text; kind 'k' prefix label; clears after ms
+    say(text, { label = '', ms = 0 } = {}) {
+      clearTimeout(msgTimer);
+      elMsg.innerHTML = text ? (label ? `<span class="udp-k">${esc(label)}</span>` : '') + esc(text) : '';
+      elMsg.classList.toggle('is-on', !!text);
+      if (text && ms) msgTimer = setTimeout(() => frame.say(''), ms);
+    },
+    // top right: { sheet: 'D.04', label: 'PACK D · LEVEL 4 / 8', par: 'PAR 01:10', marks: [true,false,false], fresh: [] }
+    status({ sheet, label, par, marks, fresh } = {}) {
+      if (sheet !== undefined) elSheet.textContent = sheet;
+      if (label !== undefined) elLabel.textContent = label;
+      if (par !== undefined) { elPar.textContent = par || ''; elDot.hidden = !par || !marks; }
+      if (marks !== undefined) { elMarks.innerHTML = marks ? marksHTML(marks, fresh || []) : ''; elDot.hidden = !marks || !elPar.textContent; }
+    },
+    timer(secs, { over = false, hidden = false } = {}) {
+      elTimer.hidden = hidden;
+      if (!hidden) elTimer.textContent = typeof secs === 'string' ? secs : clock(secs);
+      elTimer.classList.toggle('is-over', over);
+    },
+    // under the timer: a split against the personal best ('−00:04' ahead)
+    delta(text, ahead = false) {
+      elDelta.textContent = text || '';
+      elDelta.classList.toggle('is-on', !!text);
+      elDelta.classList.toggle('is-ahead', ahead);
+    },
+    // bottom tools: [{ id, label, key, keys, run, count, active, off, title }]
+    tools(list) {
+      elTools.replaceChildren();
+      keys = [];
+      for (const t of list) {
+        if (t.key || t.keys) keys.push({ key: t.key, keys: t.keys, label: t.legend || t.label, run: t.run });
+        if (t.hidden) continue;
+        const b = h('button', 'udp-btn');
+        b.type = 'button';
+        b.dataset.tool = t.id;
+        b.innerHTML = esc(t.label) + (t.count !== undefined ? `<span class="udp-count">${esc(t.count)}</span>` : '');
+        if (t.title || t.key) b.title = (t.title || t.label) + (t.key ? ` (${t.key})` : '');
+        b.classList.toggle('is-active', !!t.active);
+        b.classList.toggle('is-off', !!t.off);
+        b.addEventListener('click', ev => { if (!b.classList.contains('is-off')) t.run?.(ev); });
+        elTools.appendChild(b);
+      }
+      layout();
+    },
+    // patch one tool button: { label, count, active, off }
+    tool(id, patch) {
+      const b = elTools.querySelector(`[data-tool="${id}"]`);
+      if (!b) return;
+      if (patch.label !== undefined || patch.count !== undefined) {
+        const label = patch.label ?? b.firstChild.textContent;
+        b.innerHTML = esc(label) + (patch.count !== undefined && patch.count !== null ? `<span class="udp-count">${esc(patch.count)}</span>` : '');
+      }
+      if (patch.active !== undefined) b.classList.toggle('is-active', patch.active);
+      if (patch.off !== undefined) b.classList.toggle('is-off', patch.off);
+    },
+    // extra legend rows that are not buttons: [{ key, label }]
+    keys(list) { keys.push(...list); },
+    primary({ label, run, disabled = false, ready = false } = {}) {
+      if (label !== undefined) elPrimary.textContent = label;
+      if (run !== undefined) handlers.primary = run;
+      elPrimary.disabled = disabled;
+      elPrimary.classList.toggle('is-ready', ready);
+    },
+    get primaryEl() { return elPrimary; },
+    // the thin rule: progress 0..1 in the signal colour, and a marker (personal best) 0..1 or null
+    rule(progress, marker = null) {
+      elRule.hidden = progress === null || progress === undefined;
+      elRule.querySelector('i').style.width = (Math.max(0, Math.min(1, progress || 0)) * 100) + '%';
+      const b = elRule.querySelector('b');
+      b.classList.toggle('is-on', marker !== null && marker !== undefined);
+      if (marker !== null && marker !== undefined) b.style.left = (Math.max(0, Math.min(1, marker)) * 100) + '%';
+    },
+    // 'RUN 6 / 10' and strikes: { text, strikes: [total, used] } or null to hide
+    run(r) {
+      elRun.hidden = !r;
+      if (!r) return;
+      elRun.querySelector('.rn-text').textContent = r.text || '';
+      const s = elRun.querySelector('.udp-strikes');
+      s.innerHTML = r.strikes ? Array.from({ length: r.strikes[0] }, (_, i) => `<i class="${i < r.strikes[1] ? 'is-hit' : ''}">×</i>`).join('') : '';
+      s.title = r.strikes ? `${r.strikes[1]} of ${r.strikes[0]} strikes` : '';
+    },
+    // the side card for a 2D drawing: returns its body element
+    card(on, title = '', note = '') {
+      card.hidden = !on;
+      card.querySelector('.ck-title').textContent = title;
+      card.querySelector('.ck-note').textContent = note;
+      layout();
+      return card.querySelector('.udp-card-body');
+    },
+    cardNote(note) { card.querySelector('.ck-note').textContent = note; },
+    // keep extra space free beside the model (px)
+    reserve(r) { reserve = { left: 0, right: 0, ...r }; layout(); },
+    freeRect, layout,
+    hide(v = true) { root.classList.toggle('is-hidden', v); },
+    onMap(fn) { handlers.map = fn; },
+    legend: toggleLegend,
+  };
+  requestAnimationFrame(layout);
+  return frame;
+}
