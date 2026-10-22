@@ -1,0 +1,300 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@400;500;600&family=Newsreader:ital,wght@1,400&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { font-family: 'Inter Tight', sans-serif; }
+  #view { position: absolute; inset: 0; }
+  .lbl { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; pointer-events: none; }
+  .ui { position: absolute; }
+  svg text { font-family: inherit; }
+
+  /* ---------- MONOLITH ---------- */
+  body.mono { background: radial-gradient(120% 90% at 30% 20%, #3a3936 0%, #1d1c1b 55%, #0f0f0e 100%); color: #e9e6df; }
+  .mono .top { left: 48px; top: 40px; }
+  .mono .brand { font-size: 11px; letter-spacing: .32em; text-transform: uppercase; color: #8d8a83; }
+  .mono .title { font-size: 44px; font-weight: 300; letter-spacing: -.02em; margin-top: 18px; line-height: 1.05; }
+  .mono .title b { font-weight: 500; }
+  .mono .sub { margin-top: 10px; color: #a29e96; font-size: 15px; max-width: 360px; line-height: 1.5; }
+  .mono .sub em { color: #ff5a1f; font-style: normal; }
+  .mono .stat { right: 48px; top: 40px; text-align: right; font-family: 'IBM Plex Mono'; font-size: 12px; color: #8d8a83; letter-spacing: .08em; }
+  .mono .stat .big { font-family: 'Inter Tight'; font-size: 56px; font-weight: 300; color: #e9e6df; letter-spacing: -.03em; line-height: 1; }
+  .mono .netcard { right: 48px; bottom: 96px; width: 300px; height: 330px; border-top: 1px solid #4a4843; padding-top: 14px; }
+  .mono .netcard .k { font-size: 11px; letter-spacing: .28em; text-transform: uppercase; color: #8d8a83; }
+  .mono .bottom { left: 48px; right: 48px; bottom: 40px; display: flex; align-items: center; gap: 36px; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: #a29e96; }
+  .mono .bottom .go { margin-left: auto; color: #0f0f0e; background: #e9e6df; padding: 14px 28px; letter-spacing: .2em; }
+  .mono .bottom .rule { flex: 0 0 220px; height: 1px; background: #4a4843; position: relative; }
+  .mono .bottom .rule i { position: absolute; left: 0; top: -1px; height: 3px; width: 62%; background: #ff5a1f; }
+  .mono .lbl { font-family: 'IBM Plex Mono'; font-size: 11px; color: #ff5a1f; letter-spacing: .1em; }
+
+  /* ---------- DRAWING SET ---------- */
+  body.set { background: #ece9e1; color: #161616; font-family: 'IBM Plex Sans Condensed', sans-serif; }
+  .set .frame { position: absolute; inset: 22px; border: 2px solid #161616; pointer-events: none; }
+  .set .frame::after { content: ''; position: absolute; inset: 6px; border: .5px solid #161616; }
+  .set .tb { right: 22px; bottom: 22px; width: 430px; border-left: 2px solid #161616; border-top: 2px solid #161616; background: #ece9e1;
+     display: grid; grid-template-columns: 1fr 1fr 90px; font-size: 10px; }
+  .set .tb div { border-right: .5px solid #161616; border-bottom: .5px solid #161616; padding: 6px 9px; }
+  .set .tb small { display: block; font-size: 8px; letter-spacing: .14em; text-transform: uppercase; color: #6b6760; margin-bottom: 2px; }
+  .set .tb .proj { grid-column: 1 / 3; font-size: 15px; font-weight: 600; letter-spacing: .02em; }
+  .set .tb .sheet { grid-row: 1 / 4; grid-column: 3; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 30px; font-weight: 600; border-right: 0; }
+  .set .tb .sheet small { margin: 0 0 4px; }
+  .set .head { left: 52px; top: 48px; }
+  .set .head .t { font-size: 13px; letter-spacing: .26em; text-transform: uppercase; font-weight: 600; }
+  .set .head .q { font-size: 22px; margin-top: 10px; max-width: 520px; line-height: 1.3; }
+  .set .tags { left: 52px; bottom: 52px; display: flex; gap: 0; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+  .set .tags span { border: 1px solid #161616; padding: 9px 14px; margin-right: -1px; }
+  .set .tags span.on { background: #161616; color: #ece9e1; }
+  .set .redline { font-family: 'Newsreader', serif; font-style: italic; color: #d0281b; font-size: 19px; }
+  .set .lbl { font-family: 'IBM Plex Sans Condensed'; font-size: 11px; letter-spacing: .1em; }
+
+  /* ---------- INSTRUMENT ---------- */
+  body.inst { background: #111214; color: #c9ccd2; font-family: 'Inter Tight', sans-serif; font-size: 12px; }
+  .inst .bar { left: 0; right: 0; top: 0; height: 40px; border-bottom: 1px solid #24262b; display: flex; align-items: center; gap: 22px; padding: 0 16px; background: #15161a; }
+  .inst .bar .logo { font-weight: 600; color: #e8eaee; letter-spacing: .02em; }
+  .inst .bar .crumb { color: #7d828c; }
+  .inst .bar .crumb b { color: #e8eaee; font-weight: 500; }
+  .inst .bar .tim { margin-left: auto; font-family: 'IBM Plex Mono'; color: #e8eaee; }
+  .inst .tools { left: 12px; top: 56px; width: 40px; border: 1px solid #24262b; border-radius: 8px; background: #15161a; padding: 6px 0; }
+  .inst .tools i { display: block; width: 28px; height: 28px; margin: 4px auto; border-radius: 6px; border: 1px solid transparent; position: relative; }
+  .inst .tools i.on { background: #1d3a44; border-color: #2fb8d6; }
+  .inst .tools i::after { content: attr(data-g); position: absolute; inset: 0; display: grid; place-items: center; color: #9aa0aa; font-size: 13px; }
+  .inst .tools i.on::after { color: #7fe3f7; }
+  .inst .insp { right: 12px; top: 56px; width: 268px; bottom: 44px; border: 1px solid #24262b; border-radius: 8px; background: #15161a; overflow: hidden; }
+  .inst .insp h4 { margin: 0; padding: 11px 14px; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #7d828c; font-weight: 500; border-bottom: 1px solid #24262b; }
+  .inst .row { display: flex; justify-content: space-between; padding: 7px 14px; }
+  .inst .row span:last-child { font-family: 'IBM Plex Mono'; color: #e8eaee; }
+  .inst .row.hl span:last-child { color: #7fe3f7; }
+  .inst .row.warn span:last-child { color: #ffb547; }
+  .inst .netv { margin: 6px 12px; height: 270px; border: 1px solid #24262b; border-radius: 6px; background: #0d0e10; }
+  .inst .status { left: 0; right: 0; bottom: 0; height: 30px; border-top: 1px solid #24262b; background: #15161a; display: flex; align-items: center; gap: 22px; padding: 0 16px; font-family: 'IBM Plex Mono'; font-size: 11px; color: #7d828c; }
+  .inst .status b { color: #c9ccd2; font-weight: 400; }
+  .inst .prompt { left: 70px; bottom: 46px; background: #15161a; border: 1px solid #24262b; border-radius: 8px; padding: 10px 14px; display: flex; gap: 14px; align-items: center; }
+  .inst .prompt .btn { border: 1px solid #2fb8d6; color: #7fe3f7; padding: 6px 12px; border-radius: 5px; font-weight: 500; }
+  .inst .prompt .k { font-family: 'IBM Plex Mono'; color: #7d828c; border: 1px solid #2c2f35; border-radius: 3px; padding: 0 5px; }
+  .inst .lbl { font-family: 'IBM Plex Mono'; font-size: 11px; color: #e8eaee; background: #111214cc; padding: 1px 5px; border-radius: 3px; }
+  .inst .lbl.c { color: #7fe3f7; }
+</style>
+</head>
+<body>
+<div id="view"></div>
+<div id="ui"></div>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+
+const style = new URLSearchParams(location.search).get('s') || 'mono';
+document.body.className = style;
+const W = innerWidth, H = innerHeight;
+
+// ---------- geometry: a gable house, z up ----------
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const faces = {
+  floor: [V(-2,-1.5,0), V(-2,1.5,0), V(2,1.5,0), V(2,-1.5,0)],
+  front: [V(-2,-1.5,0), V(2,-1.5,0), V(2,-1.5,2.5), V(-2,-1.5,2.5)],
+  back:  [V(2,1.5,0), V(-2,1.5,0), V(-2,1.5,2.5), V(2,1.5,2.5)],
+  gl:    [V(-2,1.5,0), V(-2,-1.5,0), V(-2,-1.5,2.5), V(-2,0,4), V(-2,1.5,2.5)],
+  gr:    [V(2,-1.5,0), V(2,1.5,0), V(2,1.5,2.5), V(2,0,4), V(2,-1.5,2.5)],
+  rb:    [V(2,1.5,2.5), V(-2,1.5,2.5), V(-2,0,4), V(2,0,4)],
+  rf:    [V(-2,-1.5,2.5), V(2,-1.5,2.5), V(2,0,4), V(-2,0,4)],
+};
+// the front roof plane swings open about its eave
+const open = style === 'set' ? 0 : (style === 'mono' ? 1.25 : 0.95);
+const hinge = new THREE.Matrix4().makeTranslation(0, -1.5, 2.5)
+  .multiply(new THREE.Matrix4().makeRotationX(open))
+  .multiply(new THREE.Matrix4().makeTranslation(0, 1.5, -2.5));
+faces.rf = faces.rf.map(p => p.clone().applyMatrix4(hinge));
+
+const scene = new THREE.Scene();
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(2); renderer.setSize(W, H);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.getElementById('view').appendChild(renderer.domElement);
+
+const look = { mono: [-9, -12, 8.5], set: [-10, -10, 8.2], inst: [-9, -11, 9] }[style];
+const zoom = { mono: 92, set: 78, inst: 74 }[style];
+const shift = { mono: [-150, 10], set: [-170, 30], inst: [-120, 10] }[style];
+const cam = new THREE.OrthographicCamera(-W/2/zoom, W/2/zoom, H/2/zoom, -H/2/zoom, .1, 200);
+cam.up.set(0, 0, 1); cam.position.set(...look); cam.lookAt(0, 0, 1.6);
+cam.setViewOffset(W, H, -shift[0], -shift[1], W, H);
+cam.updateProjectionMatrix();
+
+const pal = {
+  mono: { face: 0xd8d2c7, ground: 0x1b1a19, edge: 0x0f0f0e, cut: 0xff5a1f, ew: 1.2, cw: 3.2 },
+  set:  { face: 0xffffff, ground: 0xece9e1, edge: 0x161616, cut: 0x161616, ew: 1.6, cw: 3.4 },
+  inst: { face: 0x8a8f99, ground: 0x111214, edge: 0x1a1c20, cut: 0x2fb8d6, ew: 1.2, cw: 3 },
+}[style];
+
+function polyGeom(pts) {
+  const g = new THREE.BufferGeometry(), pos = [];
+  for (let i = 1; i < pts.length - 1; i++) pos.push(...pts[0].toArray(), ...pts[i].toArray(), ...pts[i+1].toArray());
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); return g;
+}
+const mat = style === 'set'
+  ? new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })
+  : new THREE.MeshStandardMaterial({ color: pal.face, roughness: style === 'mono' ? .92 : .7, metalness: 0, side: THREE.DoubleSide, flatShading: true,
+      polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+for (const k in faces) {
+  const m = new THREE.Mesh(polyGeom(faces[k]), mat); m.castShadow = true; m.receiveShadow = true; scene.add(m);
+}
+
+// ground
+if (style === 'mono') {
+  const g = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.MeshStandardMaterial({ color: 0x4a4744, roughness: 1 }));
+  g.receiveShadow = true; scene.add(g);
+} else if (style === 'inst') {
+  const grid = new THREE.GridHelper(40, 40, 0x2a2d33, 0x1d1f23); grid.rotation.x = Math.PI / 2; scene.add(grid);
+  const g = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.ShadowMaterial({ opacity: .35 }));
+  g.receiveShadow = true; g.position.z = -.001; scene.add(g);
+}
+
+// light
+if (style === 'mono') {
+  scene.add(new THREE.HemisphereLight(0xb4afa6, 0x2a2826, 1.25));
+  const sun = new THREE.DirectionalLight(0xfff1dc, 3.4);
+  sun.position.set(-12, -6.5, 5.6); sun.castShadow = true;
+  sun.shadow.mapSize.set(4096, 4096); Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20 });
+  sun.shadow.radius = 3; sun.shadow.bias = -.0004; sun.shadow.normalBias = .03; scene.add(sun);
+} else if (style === 'inst') {
+  scene.add(new THREE.HemisphereLight(0xc8d2e0, 0x202328, 1.5));
+  const k = new THREE.DirectionalLight(0xffffff, 1.6); k.position.set(-6, -9, 14); k.castShadow = true;
+  k.shadow.mapSize.set(2048, 2048); k.shadow.normalBias = .03; Object.assign(k.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10 }); scene.add(k);
+}
+
+// edges
+function fat(segs, color, width, dashed = false) {
+  const g = new LineSegmentsGeometry(); g.setPositions(segs.flatMap(([a, b]) => [...a.toArray(), ...b.toArray()]));
+  const m = new LineMaterial({ color, linewidth: width, resolution: new THREE.Vector2(W, H), dashed, dashSize: .18, gapSize: .12 });
+  const l = new LineSegments2(g, m); if (dashed) l.computeLineDistances(); scene.add(l); return l;
+}
+const allEdges = [];
+for (const k in faces) { const f = faces[k]; for (let i = 0; i < f.length; i++) allEdges.push([f[i], f[(i + 1) % f.length], k]); }
+const cutKeys = new Set(['rf']);
+const plain = allEdges.filter(e => !cutKeys.has(e[2])).map(e => [e[0], e[1]]);
+const rfEdges = allEdges.filter(e => e[2] === 'rf');
+fat(plain, pal.edge, pal.ew);
+// the open roof plane: its eave is the hinge, its other three edges were cut
+fat(rfEdges.slice(1), pal.cut, pal.cw);
+fat([[rfEdges[0][0], rfEdges[0][1]]], pal.cut, pal.ew + .4, true);
+// the edges on the house that those cuts left behind
+fat([[V(-2,-1.5,2.5), V(-2,0,4)], [V(2,-1.5,2.5), V(2,0,4)], [V(-2,0,4), V(2,0,4)]], pal.cut, pal.cw);
+if (style === 'set') {
+  // heavier profile line on the ground, as an ink drawing would
+
+}
+
+renderer.render(scene, cam);
+
+// ---------- 2D overlay ----------
+const proj = p => { const v = p.clone().project(cam); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; };
+const ui = document.getElementById('ui');
+const lbl = (p, text, cls = '') => { const [x, y] = proj(p); ui.insertAdjacentHTML('beforeend', `<div class="lbl ${cls}" style="left:${x}px;top:${y}px">${text}</div>`); };
+
+// the net, in model units: floor 4x3, walls 4x2.5, roofs 4x2.12, gables 3 wide
+function netSVG(o) {
+  const r = 2.121;
+  const polys = [
+    ['floor', [[0,0],[4,0],[4,3],[0,3]]],
+    ['front', [[0,3],[4,3],[4,5.5],[0,5.5]]],
+    ['rf', [[0,5.5],[4,5.5],[4,5.5+r],[0,5.5+r]]],
+    ['back', [[0,-2.5],[4,-2.5],[4,0],[0,0]]],
+    ['rb', [[0,-2.5-r],[4,-2.5-r],[4,-2.5],[0,-2.5]]],
+    ['gl', [[0,0],[0,3],[-2.5,3],[-4,1.5],[-2.5,0]]],
+    ['gr', [[4,0],[4,3],[6.5,3],[8,1.5],[6.5,0]]],
+  ];
+  const folds = [[[0,0],[4,0]],[[0,3],[4,3]],[[0,5.5],[4,5.5]],[[0,-2.5],[4,-2.5]],[[0,0],[0,3]],[[4,0],[4,3]]];
+  const s = o.scale, ox = o.x, oy = o.y, X = p => (ox + p[0] * s).toFixed(1), Y = p => (oy + p[1] * s).toFixed(1);
+  let out = '';
+  const fk = (a, b) => [a, b].map(q => q.join(',')).sort().join('|');
+  const shown = folds.filter((f, i) => !(o.skip && i === 5));
+  const foldSet = new Set(shown.map(([a, b]) => fk(a, b)));
+  for (const [k, p] of polys) {
+    const fill = k === 'rf' ? o.hot : o.fill;
+    out += `<polygon points="${p.map(q => X(q) + ',' + Y(q)).join(' ')}" fill="${fill}" stroke="none"/>`;
+  }
+  for (const [k, p] of polys) for (let i = 0; i < p.length; i++) {
+    const a = p[i], b = p[(i + 1) % p.length];
+    if (foldSet.has(fk(a, b))) continue;
+    out += `<line x1="${X(a)}" y1="${Y(a)}" x2="${X(b)}" y2="${Y(b)}" stroke="${o.line}" stroke-width="${o.w}" stroke-linecap="round"/>`;
+  }
+  for (const [a, b] of shown) out += `<line x1="${X(a)}" y1="${Y(a)}" x2="${X(b)}" y2="${Y(b)}" stroke="${o.fold}" stroke-width="${o.fw}" stroke-dasharray="${o.dash}"/>`;
+  return out;
+}
+
+if (style === 'mono') {
+  ui.innerHTML += `
+  <div class="ui top"><div class="brand">Unnamed Drawing Project &nbsp;·&nbsp; Developments</div>
+    <div class="title">Cut it open.<br><b>Gable house</b></div>
+    <div class="sub">Cut along the edges until the house lies flat in one piece. <em>3 cuts</em> made, 3 to go. The net must fit on the sheet.</div></div>
+  <div class="ui stat">PACK D · LEVEL 4 / 8<div class="big">00:41</div>PAR 01:10 &nbsp;·&nbsp; ◆◆◇</div>
+  <div class="ui netcard"><div class="k">Net so far</div>
+    <svg width="300" height="300" style="margin-top:6px">${netSVG({ x: 95, y: 98, scale: 22, fill: 'none', hot: 'rgba(255,90,31,.14)', line: '#8d8a83', w: 1, fold: '#5a5852', fw: 1, dash: '3 3' })}</svg></div>
+  <div class="ui bottom"><span>Undo</span><span>Hint</span><div class="rule"><i></i></div><span>Run 6 / 10</span><span class="go">Unfold</span></div>`;
+  lbl(V(0, -2.6, 2.8), 'HINGE');
+  lbl(V(-0.2, -0.2, 4.45), 'CUT');
+}
+
+if (style === 'set') {
+  ui.innerHTML += `
+  <div class="frame"></div>
+  <div class="ui head"><div class="t">Developments — D.04</div><div class="q">Draw the development of the gable house. Cut lines solid, fold lines dashed.</div></div>
+  <svg class="ui" style="left:0;top:0" width="${W}" height="${H}">
+    ${netSVG({ x: W - 520, y: 250, scale: 34, fill: 'none', hot: 'none', line: '#161616', w: 1.6, fold: '#161616', fw: .8, dash: '7 4', skip: true })}
+    <circle cx="${W - 520 + 34 * 4}" cy="${250 + 34 * 1.5}" r="44" fill="none" stroke="#d0281b" stroke-width="1.6"/>
+    <line x1="${W - 520 + 34 * 4 + 30}" y1="${250 + 34 * 1.5 - 33}" x2="${W - 140}" y2="${170}" stroke="#d0281b" stroke-width="1.2"/>
+    <g font-family="IBM Plex Sans Condensed" font-size="11" letter-spacing="1.5">
+      <circle cx="${W - 520 - 4 * 34 - 40}" cy="${250 + 1.5 * 34}" r="17" fill="none" stroke="#161616" stroke-width="1.2"/>
+      <line x1="${W - 520 - 4 * 34 - 57}" y1="${250 + 1.5 * 34}" x2="${W - 520 - 4 * 34 - 23}" y2="${250 + 1.5 * 34}" stroke="#161616" stroke-width="1"/>
+      <text x="${W - 520 - 4 * 34 - 40}" y="${250 + 1.5 * 34 - 4}" text-anchor="middle">A</text>
+      <text x="${W - 520 - 4 * 34 - 40}" y="${250 + 1.5 * 34 + 12}" text-anchor="middle" font-size="8">D.05</text>
+    </g>
+  </svg>
+  <div class="ui redline" style="left:${W - 300}px;top:132px">this is a fold, not a cut —<br>the gable must stay attached</div>
+  <div class="ui tags"><span>Pencil</span><span class="on">Cut line</span><span>Fold line</span><span>Erase</span><span>Submit ↵</span></div>
+  <div class="ui tb">
+    <div class="proj"><small>Project</small>Unnamed Drawing Project</div>
+    <div class="sheet"><small>Sheet</small>D.04</div>
+    <div><small>Drawing</small>Gable house · development</div><div><small>Scale</small>1:50</div>
+    <div><small>Attempt</small>2 of 3 · −40</div><div><small>Time / par</small>01:12 / 01:30</div>
+    <div style="border-right:0"><small>Grade</small>B+</div>
+  </div>`;
+  lbl(V(-3.1, -1.5, 0), '');
+}
+
+if (style === 'inst') {
+  ui.innerHTML += `
+  <div class="ui bar"><span class="logo">Unnamed Drawing Project</span><span class="crumb">Developments / Pack D / <b>Gable house</b></span>
+    <span class="crumb">Mode <b>Cut edges</b></span><span class="tim">00:41.6 &nbsp;/&nbsp; par 01:10</span></div>
+  <div class="ui tools"><i class="on" data-g="✂"></i><i data-g="⤢"></i><i data-g="⟲"></i><i data-g="⌖"></i><i data-g="▦"></i></div>
+  <div class="ui insp"><h4>Solid</h4>
+    <div class="row"><span>Faces</span><span>7</span></div><div class="row"><span>Edges</span><span>15</span></div>
+    <div class="row hl"><span>Cuts</span><span>3 / 9</span></div><div class="row"><span>Pieces</span><span>1</span></div>
+    <div class="row warn"><span>Overlap</span><span>none</span></div>
+    <h4>Net preview</h4>
+    <svg class="netv" width="242" height="270">${netSVG({ x: 92, y: 96, scale: 18.5, fill: 'rgba(138,143,153,.10)', hot: 'rgba(47,184,214,.22)', line: '#6c727d', w: 1, fold: '#3d424a', fw: 1, dash: '3 3' })}</svg>
+    <h4>Edge</h4>
+    <div class="row"><span>Selected</span><span>ridge</span></div><div class="row"><span>Length</span><span>4.000</span></div>
+    <div class="row"><span>Dihedral</span><span>90.0°</span></div></div>
+  <div class="ui prompt"><span>Cut until the solid lies flat in one piece. The net must fit on A3.</span><span class="btn">Unfold</span><span class="k">U</span></div>
+  <div class="ui status"><span>x <b>-0.214</b></span><span>y <b>1.500</b></span><span>z <b>2.500</b></span><span>snap <b>edge</b></span><span>view <b>axo 30/60</b></span><span style="margin-left:auto">Run <b>6 / 10</b> · streak <b>4</b></span></div>`;
+  // dimension strings
+  const dim = (a, b, off, text) => {
+    const a2 = a.clone().add(off), b2 = b.clone().add(off);
+    fat([[a2, b2], [a, a2.clone().add(off.clone().multiplyScalar(.25))], [b, b2.clone().add(off.clone().multiplyScalar(.25))]], 0x6c727d, 1);
+    lbl(a2.clone().lerp(b2, .5), text);
+  };
+  dim(V(-2, -1.5, 0), V(2, -1.5, 0), V(0, -1.1, 0), '4.000');
+  dim(V(2, -1.5, 0), V(2, 1.5, 0), V(1.1, 0, 0), '3.000');
+  dim(V(-2, -1.5, 0), V(-2, -1.5, 2.5), V(-1.1, 0, 0), '2.500');
+  lbl(V(0, .1, 4.3), 'cut · ridge', 'c');
+  renderer.render(scene, cam);
+}
+window.__done = true;
+</script>
+</body>
+</html>
