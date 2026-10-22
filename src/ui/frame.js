@@ -92,8 +92,8 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
     const top = Math.max(hb.bottom, sb.bottom) + (phone ? 4 : 8);
     let bottom = bb.top - (phone ? 4 : 12);
     let left = phone ? 0 : 0, right = W;
-    if (!card.hidden) {
-      const cb = card.getBoundingClientRect();
+    const cb = card.hidden ? null : card.getBoundingClientRect();
+    if (cb && cb.height > 0) {                      // a card can be hidden by CSS on a phone
       if (phone) bottom = Math.min(bottom, cb.top - 4);
       else right = Math.min(right, cb.left - 24);
     }

@@ -290,8 +290,14 @@ export function createSession({ def, frame, stage, redlines }) {
     item.solved = true;
     frame.say('');
     sfx.done();
+    // the player may leave during the finale: record the level, show nothing
+    const mine = item, left = { mode, marks: marksNow(), secs };
     try { await def.onSolved?.(item); } catch (e) { console.error(e); }
     checking = false;
+    if (item !== mine) {
+      if (left.mode === 'pack') { recordLevel(progress, mine.id, { marks: left.marks, secs: left.secs }); saveProgress(def.id, progress); }
+      return r;
+    }
     if (mode === 'challenge') {
       run.total += secs;
       run.splits.push(run.total);

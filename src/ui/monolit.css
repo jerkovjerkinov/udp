@@ -367,6 +367,17 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   .rf-key svg { width: 24px; }
 }
 
+/* the site log (Build Order): the order so far, newest last */
+.udp-card.is-log .udp-card-body { width: 240px; height: auto; max-height: 46vh; overflow: hidden; }
+.bo-log { list-style: none; margin: 0; padding: 0; font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; color: var(--grey1); }
+.bo-log:empty::before { content: 'Nothing yet.'; color: var(--grey3); }
+.bo-log li { display: flex; gap: 10px; padding: 3px 0; border-bottom: 1px solid var(--grey4); }
+.bo-log li:last-child { color: var(--ink); }
+.bo-log li b { font-weight: 400; color: var(--grey2); width: 2.2em; flex: none; }
+.bo-log li.is-temp { color: var(--signal); }
+.bo-log li i { font-style: normal; margin-left: auto; color: var(--grey2); }
+@media (max-width: 820px) { .udp-card.is-log { display: none; } }
+
 /* ------------------------------------------------------------------ */
 /* hub                                                                 */
 /* ------------------------------------------------------------------ */

@@ -1,0 +1,143 @@
+// Build Order in 3D: every part as its own group (a mesh and its edges) that
+// can sit at home, wait in an exploded axonometric, fly in or out along its
+// way, shake when it cannot move, and take a signal tint.
+//
+// A part away from home leaves a dashed ghost of its outline at home, and a
+// leader line along the way it travels, as in an exploded axonometric.
+
+import * as THREE from 'three';
+import { createLines } from '../../src/stage/lines.js';
+import { MONOLIT } from '../../src/stage/stage.js';
+import { animate, ease } from '../../src/fx/tween.js';
+
+const MATS = { stone: MONOLIT.plaster, timber: 0xdcc6a0, steel: 0xaeb2b7, concrete: 0xd6d2c9, glass: 0xa9bcc0 };
+const TEMP = 0xb89c70;
+const SIGNAL = new THREE.Color('#ff5a1f');
+
+function geometryOf(pieces) {
+  const pos = [];
+  for (const pc of pieces) for (const f of pc.faces) {
+    const v = f.map(i => pc.verts[i]);
+    for (let k = 1; k + 1 < v.length; k++) pos.push(...v[0], ...v[k], ...v[k + 1]);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+  return g;
+}
+const segsOf = pieces => pieces.flatMap(pc => pc.lines.map(([a, b]) => [pc.verts[a], pc.verts[b]]));
+
+export function createBuildView(model, { invalidate = () => {} } = {}) {
+  const group = new THREE.Group();
+  group.name = 'build';
+  const parts = new Map();
+  const meshes = [];
+
+  for (const p of model.parts) {
+    const base = new THREE.Color(p.temp ? TEMP : MATS[p.mat] ?? MONOLIT.plaster);
+    const mat = new THREE.MeshStandardMaterial({ color: base.clone(), roughness: p.mat === 'steel' ? .6 : .92, metalness: 0, flatShading: true,
+      side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+    const mesh = new THREE.Mesh(geometryOf(p.pieces), mat);
+    mesh.castShadow = mesh.receiveShadow = true;
+    mesh.userData.partId = p.id;
+    const lines = createLines(segsOf(p.pieces), p.temp ? 'fold' : 'visible');
+    const obj = new THREE.Group();
+    obj.add(mesh, lines);
+    const ghost = createLines(segsOf(p.pieces), 'hidden', { renderOrder: 1 });
+    ghost.visible = false;
+    const leader = createLines([], 'guide');
+    group.add(obj, ghost, leader);
+    meshes.push(mesh);
+    parts.set(p.id, { p, obj, mesh, lines, ghost, leader, mat, base, at: new THREE.Vector3(), state: 'normal', hover: false, marked: false, shown: true });
+  }
+
+  const centre = p => new THREE.Vector3(...p.centre);
+
+  // three layers of tint: a state (selected by a hint, error), a mark the
+  // player set, and the pointer; the strongest wins
+  function paint(r) {
+    const k = Math.max({ normal: 0, selected: .42, error: .7 }[r.state] ?? 0, r.marked ? .5 : 0, r.hover ? .16 : 0);
+    r.mat.color.copy(r.base).lerp(SIGNAL, k);
+    r.mat.emissive.copy(SIGNAL).multiplyScalar(k * .25);
+    r.lines.setStyle(r.marked ? 'signal' : r.p.temp ? 'fold' : 'visible');
+    invalidate();
+  }
+
+  // where a part sits: an offset from home
+  function place(id, v) {
+    const r = parts.get(id);
+    r.at.set(v[0] ?? v.x, v[1] ?? v.y, v[2] ?? v.z);
+    r.obj.position.copy(r.at);
+    const away = r.at.lengthSq() > 1e-6 && r.shown;
+    r.ghost.visible = away;
+    if (away) {
+      const c = centre(r.p);
+      r.leader.setSegments([[c.toArray(), c.clone().add(r.at).toArray()]]);
+    } else r.leader.setSegments([]);
+  }
+
+  return {
+    group, meshes,
+    // the part under a raycast hit
+    idOf: obj => obj?.userData.partId ?? null,
+    name: id => parts.get(id).p.name,
+    centre: id => centre(parts.get(id).p).add(parts.get(id).at),
+    offset: id => parts.get(id).at.clone(),
+    place,
+    show(id, v = true) {
+      const r = parts.get(id);
+      r.shown = v;
+      r.obj.visible = v;
+      r.mat.opacity = 1;
+      place(id, r.at);
+    },
+    shown: id => parts.get(id).shown,
+    setState(id, s) { const r = parts.get(id); if (!r || r.state === s) return; r.state = s; paint(r); },
+    hover(id, on) { const r = parts.get(id); if (!r || r.hover === on) return; r.hover = on; paint(r); },
+    mark(id, on) { const r = parts.get(id); if (!r || r.marked === on) return; r.marked = on; paint(r); },
+    clearStates() { for (const r of parts.values()) { r.state = 'normal'; r.hover = r.marked = false; paint(r); } },
+    // fly from offset a to offset b; fade out on the way when `out`
+    fly(id, a, b, { duration = 650, out = false, easing = out ? ease.cubicIn : ease.cubicOut } = {}) {
+      const r = parts.get(id);
+      const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b);
+      r.leader.setSegments([]); r.ghost.visible = false;
+      const lm = r.lines.material, lo = lm.opacity, lt = lm.transparent;
+      if (out) { r.mat.transparent = lm.transparent = true; r.mat.needsUpdate = lm.needsUpdate = true; }
+      return animate({ duration, ease: easing, essential: true, update: (v, k) => {
+        r.obj.position.lerpVectors(A, B, v);
+        if (out) { const f = 1 - Math.max(0, (k - .45) / .55); r.mat.opacity = f; lm.opacity = lo * f; }
+      } }).promise.then(() => {
+        r.at.copy(B);
+        if (out) {
+          r.shown = false; r.obj.visible = false; r.ghost.visible = false;
+          r.mat.opacity = 1; r.mat.transparent = false; lm.opacity = lo; lm.transparent = lt; r.mat.needsUpdate = lm.needsUpdate = true;
+        }
+        else place(id, B.toArray());
+      });
+    },
+    // a small refusal along the way it tried to go
+    shake(id, dir = [0, 0, 1]) {
+      const r = parts.get(id);
+      const home = r.at.clone(), d = new THREE.Vector3(...dir);
+      return animate({ duration: 380, ease: ease.linear, essential: true, update: (v, k) => {
+        const a = Math.sin(k * Math.PI * 6) * (1 - k) * .09;
+        r.obj.position.copy(home).addScaledVector(d, a);
+      } }).promise.then(() => r.obj.position.copy(home));
+    },
+    // the model's bounds at home (and, with offsets, wherever the parts are now)
+    box(all = false) {
+      const b = new THREE.Box3();
+      for (const r of parts.values()) {
+        if (!r.shown && all) continue;
+        const pb = r.p.bbox;
+        const off = all ? r.at : new THREE.Vector3();
+        b.union(new THREE.Box3(new THREE.Vector3(pb[0], pb[1], pb[2]).add(off), new THREE.Vector3(pb[3], pb[4], pb[5]).add(off)));
+      }
+      return b;
+    },
+    dispose() {
+      for (const r of parts.values()) { r.lines.dispose(); r.ghost.dispose(); r.leader.dispose(); r.mesh.geometry.dispose(); r.mat.dispose(); }
+      group.removeFromParent();
+    },
+  };
+}
