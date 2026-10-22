@@ -18,7 +18,7 @@ import { callout } from './titleblock.js';
 import { loadProgress, loadSuite, today, currentStreak, dailyGame } from './progress.js';
 
 export const GAMES = [
-  { id: 'fold', prefix: 'F', family: 'Sheet', name: 'Fold & Punch', blurb: 'Fold a sheet, punch or cut it, and say where the holes land when it opens.', ready: false },
+  { id: 'fold', prefix: 'F', family: 'Sheet', name: 'Fold & Punch', blurb: 'Fold a sheet, punch or cut it, and say where the holes land when it opens.', ready: true },
   { id: 'origamic', prefix: 'O', family: 'Sheet', name: 'Origamic', blurb: 'Cut and crease one sheet so that it stands up as a building when the card opens.', ready: false },
   { id: 'developments', prefix: 'D', family: 'Solid', name: 'Developments', blurb: 'Cut solids open into nets, match the edges that glue, fold nets in your head.', ready: true },
   { id: 'stack', prefix: 'S', family: 'Solid', name: 'Stack', blurb: 'Build the solid that three orthographic views describe, block by block.', ready: false },
