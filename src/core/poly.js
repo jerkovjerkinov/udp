@@ -68,6 +68,43 @@ export function solidOf(verts, loops) {
   return { verts, faces, edges, edgeKey: (a, b) => byKey.get(Math.min(a, b) + ',' + Math.max(a, b))?.id, volume };
 }
 
+// Merge faces that lie in one plane and share an edge into one face, so a flat
+// stretch of surface has no seam to cut and no hinge that folds by nothing.
+// Points left in the middle of a straight edge (where only two faces meet) go.
+// A group that would not make one simple loop (a ring around a hole) is kept as it was.
+export function mergeFlat(solid) {
+  const { faces, edges, verts } = solid;
+  if (!edges.some(e => e.flat)) return solid;
+  const up = faces.map(f => f.id), find = i => up[i] === i ? i : (up[i] = find(up[i]));
+  for (const e of edges) if (e.flat) up[find(e.f[0])] = find(e.f[1]);
+  const groups = new Map();
+  for (const f of faces) { const r = find(f.id); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(f); }
+  let loops = [];
+  for (const g of groups.values()) {
+    if (g.length === 1) { loops.push(g[0].loop.slice()); continue; }
+    const next = new Map(), inner = new Set();
+    for (const f of g) f.loop.forEach((a, k) => inner.add(a + '>' + f.loop[(k + 1) % f.loop.length]));
+    let clash = false;
+    for (const f of g) f.loop.forEach((a, k) => {
+      const b = f.loop[(k + 1) % f.loop.length];
+      if (inner.has(b + '>' + a)) return;
+      if (next.has(a)) clash = true;
+      next.set(a, b);
+    });
+    const start = next.keys().next().value, loop = [start];
+    for (let v = next.get(start); v !== start && loop.length <= next.size; v = next.get(v)) loop.push(v);
+    if (clash || loop.length !== next.size) { for (const f of g) loops.push(f.loop.slice()); continue; }
+    loops.push(loop);
+  }
+  // points on a straight edge between just two faces
+  const touch = verts.map(() => 0);
+  for (const l of loops) for (const v of l) touch[v]++;
+  loops = loops.map(l => l.filter(v => touch[v] > 2));
+  const keep = new Map(), nv = [];
+  for (const l of loops) for (const v of l) if (!keep.has(v)) { keep.set(v, nv.length); nv.push(verts[v]); }
+  return solidOf(nv, loops.map(l => l.map(v => keep.get(v))));
+}
+
 // Turn or mirror a solid: f maps a vertex to its new place. Loops are reversed
 // when f mirrors, so faces stay counter-clockwise from outside.
 export function mapSolid(solid, f) {

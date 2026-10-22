@@ -5,7 +5,7 @@
 // the squared-paper pack, a block of unit cubes whose faces stay unit squares.
 // Units are plan modules, z is up, and every solid stands on z = 0.
 
-import { prism, hull, mapSolid, grounded, solidOf } from './poly.js';
+import { prism, hull, mapSolid, grounded, solidOf, mergeFlat } from './poly.js';
 import { rotateAbout, cross, unit, len } from './vec.js';
 
 // a section [x, z] drawn as seen from the front, extruded along y by depth
@@ -15,7 +15,8 @@ const plan = (outline, h) => grounded(prism(outline, h));
 const box = (x, y, z, w, d, h) => [[x, y, z], [x + w, y, z], [x + w, y + d, z], [x, y + d, z], [x, y, z + h], [x + w, y, z + h], [x + w, y + d, z + h], [x, y + d, z + h]];
 const solid = pts => grounded(hull(pts));
 
-// A block of unit cubes, every face a unit square (cells [x, y, z]).
+// A block of unit cubes on squared paper (cells [x, y, z]); squares that lie in
+// one plane make one face, so there is no seam on a flat side.
 export function blocks(cells) {
   const has = new Set(cells.map(c => c.join(',')));
   const vid = new Map(), verts = [], loops = [];
@@ -33,7 +34,7 @@ export function blocks(cells) {
     if (has.has([c[0] + d[0], c[1] + d[1], c[2] + d[2]].join(','))) continue;
     loops.push(sq.map(p => v([c[0] + p[0], c[1] + p[1], c[2] + p[2]])));
   }
-  return grounded(solidOf(verts, loops));
+  return grounded(mergeFlat(solidOf(verts, loops)));
 }
 
 // turn a solid so the face whose normal is closest to dir points straight down

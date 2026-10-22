@@ -1,6 +1,8 @@
 // node tests/core/nettasks.test.mjs — the Developments puzzles
 import { opening, matchEdges, misfit, misfitPose, distractors, baseFace, parentFaces, fitsAt, tableNet } from '../../src/core/nettasks.js';
 import { randomUnfolding, overlaps } from '../../src/core/poly.js';
+import { sheetFit } from '../../src/core/nettasks.js';
+import { PACKS } from '../../games/developments/levels.js';
 import { FORMS } from '../../src/core/forms.js';
 import { seededRng } from '../../src/core/rand.js';
 
@@ -54,6 +56,19 @@ for (const [key, f] of Object.entries(FORMS)) {
   let miss = 0;
   for (let i = 0; i < 12; i++) if (!tableNet(s, seededRng(key + ':' + i))) miss++;
   ok(!miss, key + ' table net missing for ' + miss + ' seeds');
+}
+// every level: the form has no seam on a flat side, and a sheet level has a net that fits its sheet
+for (const pk of PACKS) for (const l of pk.levels) {
+  const s = FORMS[l.form].make();
+  ok(l.form === 'frame' || s.edges.every(e => !e.flat), l.id + ' no flat seam');
+  if (!l.paper) continue;
+  const base = baseFace(s);
+  let found = 0;
+  for (let t = 0; t < 600 && found < 3; t++) {
+    const net = randomUnfolding(s, seededRng('lv:' + l.id + ':' + t), { root: base, tries: 20, pick: 'any' });
+    if (net && !net.overlaps.length && sheetFit(net, ...l.paper).fits) found++;
+  }
+  ok(found >= 3, l.id + ' nets fit the ' + l.paper.join(' x ') + ' sheet');
 }
 console.log(fails ? fails + ' failed' : 'nettasks: all passed');
 process.exit(fails ? 1 : 0);

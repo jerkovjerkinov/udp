@@ -23,7 +23,7 @@ import { createSession } from '../../src/ui/session.js';
 import { animate, ease, wait } from '../../src/fx/tween.js';
 import { sfx } from '../../src/fx/sfx.js';
 import { FORMS, formsOfPack } from '../../src/core/forms.js';
-import { unfold, mapSolid } from '../../src/core/poly.js';
+import { unfold, mapSolid, randomUnfolding } from '../../src/core/poly.js';
 import { opening, matchEdges, misfit, misfitPose, distractors, baseFace, sheetFit, tableNet } from '../../src/core/nettasks.js';
 import { seededRng, pick, randInt, shuffle } from '../../src/core/rand.js';
 import { PACKS } from './levels.js';
@@ -181,7 +181,7 @@ function cutTask(item, solid, { workshop = false } = {}) {
     if (plan && cuts.every(c => plan.cuts.includes(c))) return plan;
     const rng = seededRng('plan:' + cuts.join(','));
     const uncut = solid.edges.filter(e => !cuts.includes(e.id));
-    for (let t = 0; t < 300; t++) {
+    for (let t = 0; t < 2000; t++) {
       const parent = solid.faces.map((_, i) => i);
       const find = i => parent[i] === i ? i : (parent[i] = find(parent[i]));
       const hinges = [];
@@ -194,6 +194,14 @@ function cutTask(item, solid, { workshop = false } = {}) {
       if (!net || net.overlaps.length) continue;
       if (paper && !sheetFit(net, ...paper).fits) continue;
       plan = { hinges, cuts: solid.edges.map(e => e.id).filter(id => !hinges.includes(id)) };
+      return plan;
+    }
+    // tight sheets: the unfolding search finds the rare nets that fit
+    for (let t = 0; t < 200; t++) {
+      const net = randomUnfolding(solid, seededRng('plan:' + t), { root: base, tries: 20, pick: 'any' });
+      if (!net || net.overlaps.length || net.hinges.some(h => cuts.includes(h))) continue;
+      if (paper && !sheetFit(net, ...paper).fits) continue;
+      plan = { hinges: net.hinges, cuts: solid.edges.map(e => e.id).filter(id => !net.hinges.includes(id)) };
       return plan;
     }
     return null;

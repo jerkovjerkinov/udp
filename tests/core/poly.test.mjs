@@ -50,7 +50,9 @@ for (const [key, f] of Object.entries(FORMS)) {
   ok(n.flat.every((p, i) => near(Math.abs(area2(p)), s.faces[i].area, 1e-6)), key + ' flat areas');
   ok(n.flat.every(p => area2(p) > 0), key + ' flat faces seen from outside (ccw)');
 }
-ok(blocks([[0, 0, 0], [1, 0, 0]]).faces.length === 10, 'domino has 10 unit squares');
+ok(blocks([[0, 0, 0], [1, 0, 0]]).faces.length === 6, 'domino: squares in one plane make one face');
+// no seam on a flat side: every edge bends, except where a face must be split around a hole
+for (const [key, f] of Object.entries(FORMS)) if (key !== 'frame') ok(f.make().edges.every(e => !e.flat), key + ' has no flat seam');
 
 console.log(fails ? fails + ' failed' : 'poly: all passed');
 process.exit(fails ? 1 : 0);

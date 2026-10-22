@@ -20,7 +20,7 @@ export const PACKS = [
     L('A5', 'which', 'ell'),
     L('A6', 'match', 'step'),
     L('A7', 'fold', 'tee'),
-    L('A8', 'cut', 'stair3', { paper: [9.5, 6.5] }),
+    L('A8', 'cut', 'stair3', { paper: [7.5, 5.5] }),
   ] },
   { id: 'B', name: 'Prisms', brief: 'The first triangles: right prisms, a gable house, plans raised into blocks.', levels: [
     L('B1', 'cut', 'tri-iso'),
