@@ -605,3 +605,9 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   .udp-tut-bar { bottom: 52px; }
   .udp-map-title, .udp-hub-title { font-size: 30px; }
 }
+
+/* the loupe over a finger drawing on a sheet (board.js) */
+.udp-loupe { position: fixed; left: 0; top: 0; width: 112px; height: 112px; border-radius: 50%; overflow: hidden; z-index: 60;
+  background: var(--bg1); border: 1px solid var(--grey3); box-shadow: 0 6px 24px rgba(0, 0, 0, .45); pointer-events: none; opacity: 0; transition: opacity .12s; }
+.udp-loupe.is-on { opacity: 1; }
+.udp-loupe svg { display: block; }

@@ -49,6 +49,35 @@ const fmt = n => (Math.round(n * 10) / 10).toString();
  *   yDown (false)
  *   width, height   px, if the container has no size of its own
  */
+let boards = 0;
+
+// On a touch screen the finger covers the point it is drawing to, so a loupe
+// floats above it: the sheet under the finger at twice the size, with a ring on
+// the point the line will snap to.
+const LOUPE = 112, ZOOM = 2;
+function createLoupe(uid) {
+  const el = document.createElement('div');
+  el.className = 'udp-loupe';
+  const svg = mk('svg', { width: LOUPE, height: LOUPE }, el);
+  for (let i = 0; i < 6; i++) { const u = mk('use', {}, svg); u.setAttribute('href', `#${uid}g${i}`); }
+  const ring = mk('circle', { r: 7, fill: 'none', stroke: '#ff5a1f', 'stroke-width': 1.5 }, svg);
+  document.body.appendChild(el);
+  return {
+    // at: the finger (client px); px, py: the finger and the snap point in board px
+    show(cx, cy, fx, fy, sx, sy) {
+      const half = LOUPE / 2 / ZOOM;
+      svg.setAttribute('viewBox', `${fx - half} ${fy - half} ${2 * half} ${2 * half}`);
+      ring.setAttribute('cx', sx); ring.setAttribute('cy', sy); ring.setAttribute('r', 7 / ZOOM);
+      ring.setAttribute('stroke-width', 1.5 / ZOOM);
+      const top = cy - LOUPE - 44 < 4 ? cy + 44 : cy - LOUPE - 44;
+      el.style.transform = `translate(${Math.round(Math.max(4, Math.min(innerWidth - LOUPE - 4, cx - LOUPE / 2)))}px, ${Math.round(top)}px)`;
+      el.classList.add('is-on');
+    },
+    hide() { el.classList.remove('is-on'); },
+    dispose() { el.remove(); },
+  };
+}
+
 export function createBoard(container, opts = {}) {
   const o = { unit: 1, sub: 1, grid: 'dots', padding: 16, interactive: false, yDown: false, ...opts };
   const root = document.createElement('div');
@@ -59,6 +88,8 @@ export function createBoard(container, opts = {}) {
   const svg = mk('svg', { role: 'img' }, root);
   const gGrid = mk('g', {}, svg), gFill = mk('g', {}, svg), gLine = mk('g', {}, svg);
   const gPoint = mk('g', {}, svg), gText = mk('g', {}, svg), gOver = mk('g', {}, svg);
+  const uid = 'udpb' + (++boards);
+  [gGrid, gFill, gLine, gPoint, gText, gOver].forEach((g, i) => g.setAttribute('id', uid + 'g' + i));
 
   let W = 0, H = 0;
   let s = 30, ox = 0, oy = 0;                            // px per unit, origin in px
@@ -316,22 +347,32 @@ export function createBoard(container, opts = {}) {
   //   readout               true (length), false, or fn(length, a, b) -> text
   //   onStart(a), onSnap(q) optional: sound hooks
   function drawSegments({ commit, constrain, readout = true, onStart, onSnap, unitScale = 1, style = 'signalThin' } = {}) {
-    let a = null, last = null;
-    return onPointer({
-      down: (ev, p, q) => { a = q; last = q; onStart?.(a); ghost(a, a, { readout, unitScale, style }); },
+    let a = null, last = null, loupe = null;
+    const peek = (ev, b) => {
+      if (ev.pointerType !== 'touch') return;
+      loupe ??= createLoupe(uid);
+      const r = root.getBoundingClientRect();
+      const [sx, sy] = toPx(b);
+      loupe.show(ev.clientX, ev.clientY, ev.clientX - r.left, ev.clientY - r.top, sx, sy);
+    };
+    const off = onPointer({
+      down: (ev, p, q) => { a = q; last = q; onStart?.(a); ghost(a, a, { readout, unitScale, style }); peek(ev, q); },
       move: (ev, p, q, dragging) => {
         if (!dragging || !a) return;
         const b = constrain ? constrain(a, p) : q;
         if (!last || b[0] !== last[0] || b[1] !== last[1]) { last = b; onSnap?.(b); }
         ghost(a, b, { readout, unitScale, style });
+        peek(ev, b);
       },
       up: () => {
         const b = last;
+        loupe?.hide();
         ghost(null);
         if (a && b && (a[0] !== b[0] || a[1] !== b[1])) commit?.(a, b);
         a = null; last = null;
       },
     });
+    return () => { off(); loupe?.dispose(); loupe = null; };
   }
 
   function ghost(a, b, gopts = {}) {

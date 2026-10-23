@@ -283,7 +283,7 @@ function drawingTask(item) {
     let text = item.task === 'complete'
       ? `Most of this ${lower(viewName(item.view))} is drawn, but ${plural(item.missing || 2, 'line')} ${item.missing === 1 ? 'is' : 'are'} missing. Look at the model ${VIEWS[item.view].seen}, where the arrow points, and add ${item.missing === 1 ? 'it' : 'them'}. ${how}`
       : third
-        ? `The model is hidden. From its ${item.given.map(g => lower(viewName(g))).join(' and ')}, work out its shape and draw the ${lower(viewName(item.view))}. ${how}`
+        ? `The model is hidden. From its ${item.given.map(g => lower(viewName(g))).join(' and ')}, work out its shape and draw the ${lower(viewName(item.view))}.${/^C[12]$/.test(item.id) ? ' The Guides button draws a drafter’s projection lines.' : ''} ${how}`
         : item.hidden
           ? `Draw the building ${VIEWS[item.view].seen}, where the arrow points. Edges you can see are solid; edges that are there but out of sight are dashed: switch pens with the Pen button.`
           : `Draw the building ${VIEWS[item.view].seen}, where the arrow points: every edge you can see, and nothing you can’t. ${how}`;
@@ -327,6 +327,39 @@ function drawingTask(item) {
     sfx.tick();
     render();
   }
+  // Projection guides (third view): the drafter's construction lines. Heights
+  // carry straight across from the front, widths straight up, and depth turns
+  // the corner between the top and the side on a 45 degree miter line.
+  let projOn = false, projN = 0;
+  function projectors() {
+    const V = sheet.views, T = V.top, R = V.right, F = V.front, segs = [];
+    const pts = v => { const xs = new Set(), ys = new Set(); for (const l of v.lines) for (const p of [l.a, l.b]) { xs.add(p[0]); ys.add(p[1]); } return { xs: [...xs], ys: [...ys] }; };
+    if (!T || !R || !F) return { segs, miter: null };
+    // the miter: right-view x and top-view y measure the same depth
+    const x0 = R.box.x0, y0 = T.box.y0, k = Math.max(R.box.x1 - x0, T.box.y1 - y0);
+    const miter = [[x0, y0], [x0 + k, y0 + k]];
+    if (item.view === 'right') {
+      for (const y of pts(F).ys) segs.push([[F.box.x1, y], [R.box.x1, y]]);
+      for (const y of pts(T).ys) { const mx = x0 + (y - y0); segs.push([[T.box.x1, y], [mx, y]], [[mx, y], [mx, R.box.y0]]); }
+    } else if (item.view === 'top') {
+      for (const x of pts(F).xs) segs.push([[x, F.box.y1], [x, T.box.y1]]);
+      for (const x of pts(R).xs) { const my = y0 + (x - x0); segs.push([[x, R.box.y1], [x, my]], [[x, my], [T.box.x0, my]]); }
+    }
+    return { segs, miter };
+  }
+  function showProjectors(on) {
+    projOn = on;
+    for (let i = 0; i < projN; i++) board.remove('pj' + i);
+    projN = 0;
+    if (on) {
+      const { segs, miter } = projectors();
+      segs.forEach(([a, b]) => board.line(a, b, 'guide', { id: 'pj' + projN++, hit: false, noFit: true }));
+      if (miter) board.line(miter[0], miter[1], 'fold', { id: 'pj' + projN++, hit: false, noFit: true });
+    }
+    frame.tool('guides', { active: on });
+    sfx.tick();
+  }
+
   function clearGuides() { for (let i = 0; i < guides; i++) board.remove('g' + i); guides = 0; }
   function showGuides(lines) {
     clearGuides();
@@ -342,7 +375,7 @@ function drawingTask(item) {
     { id: 'undo', label: 'Undo', key: 'Z', keys: ['Ctrl+Z'], run: undo },
     { id: 'reset', label: 'Clear', key: 'R', run: () => { if (drawn.size) { history.push({ del: [...drawn.keys()], was: [...drawn.values()] }); drawn = new Map(); sfx.slide(); render(); } } },
     ...(item.hidden ? [{ id: 'pen', label: 'Pen: solid', key: 'P', title: 'Switch between the solid and the dashed pen', run: () => { pen = pen === 'seen' ? 'hidden' : 'seen'; sfx.tick(); render(); } }] : []),
-    ...(third ? [] : [{ id: 'look', label: 'Look', key: 'L', run: () => look(item.view) }]),
+    ...(third ? [{ id: 'guides', label: 'Guides', key: 'G', title: 'Projection lines from the two views', run: () => showProjectors(!projOn) }] : [{ id: 'look', label: 'Look', key: 'L', run: () => look(item.view) }]),
     { id: 'hint', label: 'Hint', key: 'H', run: () => session.hint() },
   ]);
   viewKeys();
@@ -378,9 +411,12 @@ function drawingTask(item) {
     hint(n) {
       if (n === 1) {
         if (item.hidden) return { text: `First draw everything you can see ${VIEWS[item.view].seen}. Then turn the model and look for edges behind walls or round corners: each of them is a dashed line, at the place it would be if the walls were glass.` };
-        if (third) return { text: item.view === 'top'
-          ? 'Take each line of the front and side views and ask what it is: a roof edge, a ridge or a wall top. From above, each of them is a line too, at the same place across the building.'
-          : 'Each height on the front view carries straight across to the side view, and each depth on the top view turns the corner to become a width on the side.' };
+        if (third) {
+          if (!projOn) showProjectors(true);
+          return { text: item.view === 'top'
+            ? 'The guides are on: every width on the front carries straight up, and every depth on the side turns the corner on the 45 degree line. Your corners sit where the guides cross.'
+            : 'The guides are on: every height on the front carries straight across, and every depth on the top view turns the corner on the 45 degree line. Your corners sit where the guides cross.' };
+        }
         return { text: item.view === 'top'
           ? 'From above, every place where two slopes meet is a line: ridges, hips and valleys. Heights don’t show at all. Try the Look button to see the model from overhead.'
           : `Draw only what faces you ${VIEWS[item.view].seen}. A line goes wherever the surface changes: an edge, a crease, or a wall that steps back. Try the Look button to see the model straight on.` };
