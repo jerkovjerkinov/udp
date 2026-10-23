@@ -15,6 +15,7 @@ import { opening, baseFace } from '../core/nettasks.js';
 import { rotateAbout } from '../core/vec.js';
 import { animate, ease, reducedMotion } from '../fx/tween.js';
 import { esc } from './frame.js';
+import { BUILD } from './fresh.js';
 import { callout } from './titleblock.js';
 import { loadProgress, loadSuite, today, currentStreak, dailyGame } from './progress.js';
 
@@ -152,7 +153,7 @@ export function createHub(root) {
         <div class="udp-gcard-head">${callout(g.prefix, g.ready ? '01' : '··', { size: 44, dim: !g.ready })}<div><div class="udp-gcard-name">${esc(g.name)}</div><p class="udp-gcard-blurb">${esc(g.blurb)}</p></div></div>
         <div class="udp-gcard-state">${stateOf(g)}</div>
       </a>`).join('')}</section>`).join('')}</div>
-    <footer class="udp-hub-foot"><span class="udp-k">Progress stays in this browser</span><span class="udp-k">Plaster, one light, one signal colour</span></footer>
+    <footer class="udp-hub-foot"><span class="udp-k">Progress stays in this browser</span><span class="udp-k">Plaster, one light, one signal colour</span><span class="udp-k">Build ${esc(BUILD.split('-')[0])}</span></footer>
   </div>`;
 
   // ------------------------------------------------------------------
