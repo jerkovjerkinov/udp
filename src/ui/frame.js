@@ -71,7 +71,7 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
   const bar = h('nav', 'udp-bar');
   bar.innerHTML = `<div class="udp-bar-tools"></div><div class="udp-rule" hidden><i></i><b></b></div>
     <div class="udp-run" hidden><span class="rn-text"></span><span class="udp-strikes"></span></div>
-    <div class="udp-bar-end"><div class="udp-util">
+    <div class="udp-bar-end"><button class="udp-btn udp-more" data-act="more" aria-expanded="false" aria-label="More">•••</button><div class="udp-util">
       <button class="udp-btn" data-act="sound" aria-pressed="false"></button>
       <button class="udp-btn" data-act="keys" title="Keyboard (?)">?</button>
       <button class="udp-btn" data-act="map">Levels</button>
@@ -128,7 +128,51 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
     left += reserve.left; right -= reserve.right;
     return { x: left, y: y0, w: Math.max(80, right - left), h: Math.max(80, bottom - y0) };
   }
-  function layout(animate = false) { stage?.setRect(freeRect(), { animate }); }
+  // cards and overlays on a phone stand just above the bar, whatever its height
+  function layout(animate = false) {
+    document.documentElement.style.setProperty('--bar-h', Math.round(window.innerHeight - bar.getBoundingClientRect().top) + 'px');
+    stage?.setRect(freeRect(), { animate });
+  }
+  document.addEventListener('pointerdown', ev => { if (ev.target instanceof Node && !bar.contains(ev.target)) bar.classList.remove('is-more'); });
+
+  // On a phone the instructions fold to two lines once the player starts on the
+  // model or the sheet, so the model gets the room; a tap on them opens them again
+  const narrow = () => window.innerWidth <= 820 && !(window.innerHeight <= 500 && window.innerWidth > window.innerHeight);
+  elSub.addEventListener('click', ev => {
+    if (!narrow() || ev.target.closest('a, button')) return;
+    elSub.classList.toggle('is-short');
+    layout();
+  });
+  const fold = ev => {
+    if (!narrow() || !(ev.target instanceof Node) || elSub.classList.contains('is-short') || head.contains(ev.target) || bar.contains(ev.target)) return;
+    if (!elSub.querySelector('.udp-sub-text')?.textContent.trim()) return;
+    elSub.classList.add('is-short');
+    layout();
+  };
+  window.addEventListener('pointerdown', fold, true);
+
+  // On a phone the card's label row is a handle: drag it to give the sheet or the
+  // model more of the screen. The height holds for the rest of the visit.
+  let cardH = null;
+  const cardBody = () => card.querySelector('.udp-card-body');
+  const handle = card.querySelector('.udp-card-k');
+  handle.addEventListener('pointerdown', ev => {
+    if (!narrow()) return;
+    ev.preventDefault();
+    const body = cardBody(), y0 = ev.clientY, h0 = body.getBoundingClientRect().height;
+    handle.setPointerCapture(ev.pointerId);
+    card.classList.add('is-sizing');
+    const move = e => {
+      const lo = window.innerHeight * .16, hi = window.innerHeight * .6;
+      cardH = Math.round(Math.max(lo, Math.min(hi, h0 - (e.clientY - y0))));
+      body.style.height = cardH + 'px';
+      layout();
+    };
+    const up = () => { handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up); card.classList.remove('is-sizing'); };
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
+  });
   const ro = new ResizeObserver(() => layout());
   for (const el of [head, stat, card, bar]) ro.observe(el);
   window.addEventListener('resize', layout);
@@ -188,6 +232,9 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
     const b = ev.target.closest('[data-act]');
     if (!b) return;
     const act = b.dataset.act;
+    // on a phone, sound, keys and levels sit behind one button
+    if (act === 'more') { const on = !bar.classList.contains('is-more'); bar.classList.toggle('is-more', on); b.setAttribute('aria-expanded', on); return; }
+    bar.classList.remove('is-more');
     if (act === 'sound') setSound(sfx.muted);
     else if (act === 'keys') toggleLegend();
     else if (act === 'map') { ev.preventDefault(); handlers.map(); }
@@ -203,12 +250,22 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
     root, head, stat, card, bar, legend,
     // title: a light lead line and a bold object name
     title(lead, name) {
-      elTitle.innerHTML = `${esc(lead)}${name ? `<b>${esc(name)}</b>` : ''}`;
+      const html = `${esc(lead)}${name ? `<b>${esc(name)}</b>` : ''}`;
+      // a new sheet opens with its instructions in full
+      if (html !== elTitle.innerHTML) elSub.classList.remove('is-short');
+      elTitle.innerHTML = html;
       layout();
     },
     // sub text: plain text, or HTML when html is true (use <em> for the signal colour)
     // on a touch screen the instructions say tap, not click
-    sub(text, html = false) { elSub[html ? 'innerHTML' : 'textContent'] = touchWords(text || ''); layout(); },
+    // the count (a .udp-count span) stays on its own line when the sentence folds
+    sub(text, html = false) {
+      elSub[html ? 'innerHTML' : 'textContent'] = touchWords(text || '');
+      const words = h('span', 'udp-sub-text');
+      for (const n of [...elSub.childNodes]) if (!(n.classList?.contains('udp-count'))) words.appendChild(n);
+      elSub.prepend(words);
+      layout();
+    },
     // a short italic message under the sub text; kind 'k' prefix label; clears after ms
     say(text, { label = '', ms = 0 } = {}) {
       clearTimeout(msgTimer);
@@ -293,6 +350,8 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
     // the side card for a 2D drawing: returns its body element
     card(on, title = '', note = '') {
       card.hidden = !on;
+      if (!on) cardBody().style.height = '';
+      if (on && cardH && narrow()) cardBody().style.height = cardH + 'px';
       card.querySelector('.ck-title').textContent = title;
       card.querySelector('.ck-note').textContent = note;
       layout();
@@ -304,6 +363,21 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
     // keep the model under the title column instead of beside it (a wide side card)
     stack(v = true) { stacked = v; layout(); },
     freeRect, layout,
+    // On a phone, give the card only the height its board needs at full width,
+    // between lo and hi of the screen, so a wide, low sheet leaves the model room.
+    // The player's own height (the handle) wins.
+    fitSheet(board, { lo = .2, hi = .36 } = {}) {
+      const body = cardBody();
+      if (!narrow() || card.hidden) return;
+      if (cardH) { body.style.height = cardH + 'px'; layout(); return; }
+      const r = board.el.getBoundingClientRect(), br = body.getBoundingClientRect();
+      const chrome = Math.max(0, br.height - r.height);
+      const want = board.heightFor(r.width || br.width) + chrome;
+      body.style.height = Math.round(Math.max(window.innerHeight * lo, Math.min(window.innerHeight * hi, want))) + 'px';
+      layout();
+    },
+    // the card height the player chose with the handle (phone), or null
+    get cardHeight() { return narrow() ? cardH : null; },
     hide(v = true) { root.classList.toggle('is-hidden', v); },
     onMap(fn) { handlers.map = fn; },
     legend: toggleLegend,

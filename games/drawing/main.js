@@ -92,23 +92,10 @@ function closeCard() {
 
 const grow = (b, k) => ({ x0: b.x0 - k, y0: b.y0 - k, x1: b.x1 + k, y1: b.y1 + k });
 
-// On a phone the sheet sits under the model: give it only the height its drawing
-// needs, so a wide, low elevation leaves the model room to be seen
-const phone = matchMedia('(max-width: 820px)');
-function fitCard(board, b, { roomy = false } = {}) {
-  const body = document.querySelector('.udp-card.is-plan .udp-card-body');
-  if (!body) return;
-  if (!phone.matches) { body.style.height = ''; return; }
-  const w = body.clientWidth || innerWidth;
-  const bw = Math.max(1, b.x1 - b.x0), bh = Math.max(1, b.y1 - b.y0 + 1.6);
-  // dots about 28 px apart are plenty for a fingertip
-  const want = bh * Math.min(28, (w - 48) / bw) + 60;
-  // room between the text and the foot of the card; the model keeps some of it unless it is hidden
-  const subEnd = document.querySelector('.udp-sub')?.getBoundingClientRect().bottom ?? 0;
-  const room = body.getBoundingClientRect().bottom - subEnd - 64 - (roomy ? 0 : 130);
-  body.style.height = Math.round(Math.max(innerHeight * .2, Math.min(roomy ? room : innerHeight * .4, room, want))) + 'px';
-  frame.layout();
-  board.fit();
+// On a phone the sheet sits under the model and takes only the height its
+// drawing needs; with the model hidden (a third view) it may take more
+function fitCard(board, { roomy = false } = {}) {
+  frame.fitSheet(board, { lo: .2, hi: roomy ? .56 : .32 });
 }
 
 // the name of a view under it on the sheet
@@ -528,7 +515,7 @@ function load(item) {
   frame.primaryEl.style.display = ['complete', 'draw', 'third'].includes(item.task) ? '' : 'none';
   task = item.task === 'error' ? errorTask(item) : item.task === 'which' ? whichTask(item) : drawingTask(item);
   // sized and framed once the texts have taken their room, so a phone keeps its padding small
-  if (task.fitBounds) fitCard(task.board, task.fitBounds, { roomy: task.roomy });
+  if (task.board) fitCard(task.board, { roomy: task.roomy });
   frameModel(task.model);
 }
 

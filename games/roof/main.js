@@ -90,6 +90,8 @@ function legendHTML() {
   return sw('profile', 'eave') + sw('ridge', 'ridge') + sw('fold', 'hip') + sw('mountain', 'valley');
 }
 
+// the open card's board, so load() can size the card to it on a phone
+let sheet = null;
 function openCard(title, note, { interactive = false } = {}) {
   const body = frame.card(true, title, note);
   document.querySelector('.udp-card').classList.add('is-plan');
@@ -102,9 +104,11 @@ function openCard(title, note, { interactive = false } = {}) {
   body.append(holder, legend);
   const board = createBoard(holder, { yDown: true, unit: S, sub: S, grid: 'dots', padding: 26, interactive, maxScale: 60 });
   frame.layout();
+  sheet = board;
   return board;
 }
 function closeCard() {
+  sheet = null;
   frame.card(false);
   document.querySelector('.udp-card').classList.remove('is-plan');
 }
@@ -700,6 +704,7 @@ function load(item) {
     : item.task === 'error' ? errorTask(item, roof)
     : item.task === 'name' ? nameTask(item, roof)
     : drawTask(item, roof, { construct: item.task === 'construct' });
+  if (sheet) frame.fitSheet(sheet);
 }
 
 function openWorkshop() {

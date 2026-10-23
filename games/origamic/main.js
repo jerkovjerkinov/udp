@@ -122,6 +122,8 @@ function legendHTML() {
   return sw('profile', 'cut') + sw('fold', 'valley') + sw('mountain', 'mountain');
 }
 
+// the open card's board, so load() can size the card to it on a phone
+let sheet = null;
 function openCard(title, note, { grid = 'dots' } = {}) {
   const body = frame.card(true, title, note);
   document.querySelector('.udp-card').classList.add('is-plan');
@@ -134,9 +136,10 @@ function openCard(title, note, { grid = 'dots' } = {}) {
   body.append(holder, legend);
   const board = createBoard(holder, { unit: 1, sub: 1, grid, padding: 22, maxScale: 46 });
   frame.layout();
+  sheet = board;
   return board;
 }
-function closeCard() { frame.card(false); document.querySelector('.udp-card').classList.remove('is-plan'); }
+function closeCard() { sheet = null; frame.card(false); document.querySelector('.udp-card').classList.remove('is-plan'); }
 
 // the pattern of a card at offset off; returns a function that removes it.
 // live: strips that cannot stand show in the signal colour
@@ -658,6 +661,7 @@ function load(item) {
   frame.primaryEl.style.display = item.task === 'read' ? 'none' : '';
   const { rng, card } = cardOf(item);
   task = item.task === 'read' ? readTask(item, card, rng) : item.task === 'tear' ? tearTask(item, card, rng) : drawTask(item, card);
+  if (sheet) frame.fitSheet(sheet);
 }
 function openWorkshop() {
   reset();

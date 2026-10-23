@@ -359,6 +359,13 @@ export function createBoard(container, opts = {}) {
     clear() { for (const it of items.values()) it.els?.forEach(e => e.remove()); items.clear(); ghost(null); },
     items: () => [...items.values()],
     fit, redraw, snap, hit, toWorld, toClient, toPx, ghost, onPointer, drawSegments,
+    // what the last fit framed (sheet units), and the px it wants for a width w
+    extent: () => boundsOf(fitWhat),
+    heightFor(w) {
+      const b = boundsOf(fitWhat), pad = fitOpts.padding ?? o.padding;
+      const bw = Math.max(1e-6, b.x1 - b.x0), bh = Math.max(1e-6, b.y1 - b.y0);
+      return bh * Math.min((w - 2 * pad) / bw, fitOpts.maxScale ?? o.maxScale ?? 80) + 2 * pad;
+    },
     setGrid(grid, bounds) { o.grid = grid; if (bounds !== undefined) o.gridBounds = bounds; drawGrid(); },
     dispose() { ro.disconnect(); root.remove(); },
   };
