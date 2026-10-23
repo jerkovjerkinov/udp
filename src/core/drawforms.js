@@ -60,6 +60,8 @@ export const DRAW_FORMS = {
   'step-house': { name: 'Two-storey house with a wing', make: () => [gableX(0, 0, 2, 2, 2, 3), gableX(2, 0, 2, 2, 1, 2)] },
   'tower-house': { name: 'Tower house', make: () => [gableX(0, 0, 4, 2, 1, 2), box(4, 0, 0, 2, 2, 3), pyramidOn(4, 0, 2, 2, 3, 1)] },
   // four roofs over one footprint, for telling top views apart
+  slab: { name: 'Flat slab', make: () => [box(0, 0, 0, 3, 3, 1)] },
+  'ell-prism-r': { name: 'L-plan block, turned', make: () => [mapSolid(FORMS['ell-prism'].make(), ([x, y, z]) => [3 - x, y, z])] },
   'flat-block': { name: 'Flat-roofed block', make: () => [box(0, 0, 0, 4, 2, 1.5)] },
   'cross-ridge': { name: 'House turned end-on', make: () => [gableY(0, 0, 4, 2, 1, 2)] },
   'shed-block': { name: 'Mono-pitch block', make: () => [shedX(0, 0, 4, 2, 1, 2)] },

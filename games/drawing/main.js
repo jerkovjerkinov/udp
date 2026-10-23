@@ -25,7 +25,7 @@ import { createSession } from '../../src/ui/session.js';
 import { animate, ease, wait } from '../../src/fx/tween.js';
 import { sfx } from '../../src/fx/sfx.js';
 import { mergeSteps } from '../../src/core/lattice.js';
-import { VIEWS, viewOf, stepsAny } from '../../src/core/views.js';
+import { VIEWS, STEP, viewOf, stepsAny } from '../../src/core/views.js';
 import { DRAW_FORMS, drawForm } from '../../src/core/drawforms.js';
 import { compareDrawing, hiddenForComplete, mistake, signature, levelSheet, layout, answerSteps } from '../../src/core/drawtasks.js';
 import { seededRng, pick, shuffle } from '../../src/core/rand.js';
@@ -156,6 +156,42 @@ function addModel(solids, view, { hidden = false } = {}) {
   };
 }
 
+// The picture plane: a pane of glass between the arrow and the model, where the
+// drawing lands line by line as it is drawn. It is the glass box every drafting
+// course starts from: the view is what the building leaves on the glass.
+// v is the view as laid out on the sheet (its off maps sheet points back).
+function addGlass(m, solids, view, v) {
+  const V = VIEWS[view];
+  const U = new THREE.Vector3(...V.u), Wv = new THREE.Vector3(...V.w), Dv = new THREE.Vector3(...V.d);
+  let t0 = Infinity;
+  for (const s of solids) for (const p of s.verts) t0 = Math.min(t0, p[0] * V.d[0] + p[1] * V.d[1] + p[2] * V.d[2]);
+  t0 -= .3;
+  const at = ([x, y]) => U.clone().multiplyScalar((x - v.off[0]) * STEP).addScaledVector(Wv, (y - v.off[1]) * STEP).addScaledVector(Dv, t0).toArray();
+  const b = grow(v.box, .6);
+  const c = [[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]].map(at);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute([...c[0], ...c[1], ...c[2], ...c[0], ...c[2], ...c[3]], 3));
+  const mat = new THREE.MeshBasicMaterial({ color: '#e9e6df', transparent: true, opacity: .07, side: THREE.DoubleSide, depthWrite: false });
+  const pane = new THREE.Mesh(geo, mat);
+  pane.renderOrder = 3;
+  const rim = createLines(c.map((p, i) => [p, c[(i + 1) % 4]]), 'fold', { on: 'sheet', renderOrder: 4 });
+  const seen = createLines([], 'profile', { on: 'sheet', renderOrder: 6 });
+  const hidden = createLines([], 'hiddenPen', { on: 'sheet', renderOrder: 6 });
+  const glass = new THREE.Group();
+  glass.add(pane, rim, seen, hidden);
+  m.group.add(glass);
+  return {
+    // lines on the sheet: [{ a, b, kind }]
+    draw(lines) {
+      seen.setSegments(lines.filter(l => l.kind !== 'hidden').map(l => [at(l.a), at(l.b)]));
+      hidden.setSegments(lines.filter(l => l.kind === 'hidden').map(l => [at(l.a), at(l.b)]));
+      stage.invalidate();
+    },
+    set visible(on) { glass.visible = on; stage.invalidate(); },
+    dispose() { geo.dispose(); mat.dispose(); rim.dispose(); seen.dispose(); hidden.dispose(); glass.removeFromParent(); },
+  };
+}
+
 function frameModel(m) {
   const r = stage.rect;
   stage.frame(m.box, { padding: Math.max(8, Math.min(64, Math.min(r.w, r.h) * .12)) });
@@ -198,8 +234,10 @@ function drawingTask(item) {
   const third = item.task === 'third';
   const sheet = levelSheet(item);
   const target = sheet.views[item.view];
-  const answer = answerSteps(target);
+  const hid = { hidden: !!item.hidden };
+  const answer = answerSteps(target, hid);
   const model = addModel(sheet.solids, item.view, { hidden: third });
+  const glass = addGlass(model, sheet.solids, item.view, target);
   const region = third ? target.box : grow(target.box, 1);
 
   const board = openCard(third ? 'Sheet' : viewName(item.view), third ? `draw the ${lower(viewName(item.view))}` : VIEWS[item.view].seen, { interactive: true });
@@ -209,13 +247,13 @@ function drawingTask(item) {
   const given = new Map();
   if (item.task === 'complete') {
     const rng = seededRng('complete:' + item.id + ':' + (item.seed ?? ''));
-    const hide = new Set(hiddenForComplete(target, rng, item.missing || 2).flatMap(l => l.steps));
+    const hide = new Set(hiddenForComplete(target, rng, item.missing || 2, hid).flatMap(l => l.steps));
     for (const [k, v] of answer) if (!hide.has(k)) given.set(k, v);
   }
   if (third) {
     for (const g of item.given) {
       const v = sheet.views[g];
-      mergeSteps(answerSteps(v)).forEach((l, i) => board.line(l.a, l.b, 'visible', { id: `gv${g}${i}`, hit: false }));
+      mergeSteps(answerSteps(v, hid)).forEach((l, i) => board.line(l.a, l.b, l.kind === 'hidden' ? 'fold' : 'visible', { id: `gv${g}${i}`, hit: false }));
       viewLabel(board, v.box, VIEWS[g].short, { id: 'lab' + g });
     }
     board.polygon([[region.x0, region.y0], [region.x1, region.y0], [region.x1, region.y1], [region.x0, region.y1]], { id: 'frame', fill: 'none', stroke: 'guide', hit: false });
@@ -224,9 +262,11 @@ function drawingTask(item) {
     // the sheet fits the region with room for its label
     board.polygon([[region.x0, region.y0], [region.x1, region.y0], [region.x1, region.y1], [region.x0, region.y1]], { id: 'frame', fill: 'none', stroke: null, hit: false });
   }
-  mergeSteps(given).forEach((l, i) => board.line(l.a, l.b, 'visible', { id: 'gc' + i, hit: false }));
+  mergeSteps(given).forEach((l, i) => board.line(l.a, l.b, l.kind === 'hidden' ? 'fold' : 'visible', { id: 'gc' + i, hit: false }));
   board.fit();
 
+  // the pen: 'seen' (solid) or, on a hidden-line sheet, 'hidden' (dashed)
+  let pen = 'seen';
   let drawn = new Map();
   const history = [];
   let guides = 0;
@@ -235,7 +275,8 @@ function drawingTask(item) {
   function render() {
     for (const it of board.items()) if (/^d\d/.test(String(it.id))) board.remove(it.id);
     const lines = mergeSteps(drawn);
-    lines.forEach((l, i) => board.line(l.a, l.b, 'profile', { id: 'd' + i, line: l }));
+    lines.forEach((l, i) => board.line(l.a, l.b, l.kind === 'hidden' ? 'hiddenPen' : 'profile', { id: 'd' + i, line: l }));
+    glass.draw([...mergeSteps(given), ...lines]);
     const n = lines.length;
     // how to draw, on the first sheets only
     const how = /^(A[1-3]|B1|C1)$/.test(item.id) ? 'Drag between points to draw; tap a line to take it away.' : '';
@@ -243,11 +284,15 @@ function drawingTask(item) {
       ? `Most of this ${lower(viewName(item.view))} is drawn, but ${plural(item.missing || 2, 'line')} ${item.missing === 1 ? 'is' : 'are'} missing. Look at the model ${VIEWS[item.view].seen}, where the arrow points, and add ${item.missing === 1 ? 'it' : 'them'}. ${how}`
       : third
         ? `The model is hidden. From its ${item.given.map(g => lower(viewName(g))).join(' and ')}, work out its shape and draw the ${lower(viewName(item.view))}. ${how}`
-        : `Draw the building ${VIEWS[item.view].seen}, where the arrow points: every edge you can see, and nothing you can’t. ${how}`;
+        : item.hidden
+          ? `Draw the building ${VIEWS[item.view].seen}, where the arrow points. Edges you can see are solid; edges that are there but out of sight are dashed: switch pens with the Pen button.`
+          : `Draw the building ${VIEWS[item.view].seen}, where the arrow points: every edge you can see, and nothing you can’t. ${how}`;
+    if (item.hidden && item.task === 'complete') text += ' Use the Pen button for a dashed line.';
     text = text.trim();
     frame.sub(`${text}<span class="udp-count">${plural(n, 'line')} drawn</span>`, true);
     frame.primary({ label: 'Check', run: () => session.check(), disabled: !drawn.size, ready: false });
     frame.tool('undo', { off: !history.length });
+    frame.tool('pen', { label: pen === 'hidden' ? 'Pen: dashed' : 'Pen: solid', active: pen === 'hidden' });
     stage.invalidate();
   }
 
@@ -255,10 +300,11 @@ function drawingTask(item) {
   function commit(a0, b0) {
     const a = clamp(a0), b = clamp(b0);
     if (a[0] === b[0] && a[1] === b[1]) return;
-    const add = stepsAny(a, b).filter(k => !drawn.has(k) && !given.has(k));
+    // drawing over a line in the other pen redraws it in this one
+    const add = stepsAny(a, b).filter(k => drawn.get(k) !== pen && !given.has(k));
     if (!add.length) { sfx.tick(); return; }
-    history.push({ add });
-    for (const k of add) drawn.set(k, 'seen');
+    history.push({ add, was: add.map(k => drawn.get(k)) });
+    for (const k of add) drawn.set(k, pen);
     sfx.pencil();
     red.clear();
     clearGuides();
@@ -268,7 +314,7 @@ function drawingTask(item) {
     const h = board.hit(ev, { kinds: ['seg'], filter: it => /^d\d/.test(String(it.id)), tol: 10 });
     if (!h) return;
     const del = h.item.line.steps;
-    history.push({ del });
+    history.push({ del, was: del.map(k => drawn.get(k)) });
     for (const k of del) drawn.delete(k);
     sfx.tick();
     render();
@@ -276,15 +322,15 @@ function drawingTask(item) {
   function undo() {
     const last = history.pop();
     if (!last) return;
-    if (last.add) for (const k of last.add) drawn.delete(k);
-    if (last.del) for (const k of last.del) drawn.set(k, 'seen');
+    if (last.add) last.add.forEach((k, i) => last.was?.[i] ? drawn.set(k, last.was[i]) : drawn.delete(k));
+    if (last.del) last.del.forEach((k, i) => drawn.set(k, last.was?.[i] || 'seen'));
     sfx.tick();
     render();
   }
   function clearGuides() { for (let i = 0; i < guides; i++) board.remove('g' + i); guides = 0; }
   function showGuides(lines) {
     clearGuides();
-    lines.forEach((l, i) => board.line(l.a, l.b, 'signalFold', { id: 'g' + i, hit: false }));
+    lines.forEach((l, i) => board.line(l.a, l.b, item.hidden && l.kind === 'hidden' ? 'signalFold' : 'signalThin', { id: 'g' + i, hit: false }));
     guides = lines.length;
   }
 
@@ -294,7 +340,8 @@ function drawingTask(item) {
   frame.title(TITLES[item.task], item.name);
   frame.tools([
     { id: 'undo', label: 'Undo', key: 'Z', keys: ['Ctrl+Z'], run: undo },
-    { id: 'reset', label: 'Clear', key: 'R', run: () => { if (drawn.size) { history.push({ del: [...drawn.keys()] }); drawn = new Map(); sfx.slide(); render(); } } },
+    { id: 'reset', label: 'Clear', key: 'R', run: () => { if (drawn.size) { history.push({ del: [...drawn.keys()], was: [...drawn.values()] }); drawn = new Map(); sfx.slide(); render(); } } },
+    ...(item.hidden ? [{ id: 'pen', label: 'Pen: solid', key: 'P', title: 'Switch between the solid and the dashed pen', run: () => { pen = pen === 'seen' ? 'hidden' : 'seen'; sfx.tick(); render(); } }] : []),
     ...(third ? [] : [{ id: 'look', label: 'Look', key: 'L', run: () => look(item.view) }]),
     { id: 'hint', label: 'Hint', key: 'H', run: () => session.hint() },
   ]);
@@ -306,24 +353,31 @@ function drawingTask(item) {
 
   return {
     model, board, commit, fitBounds: grow(sheet.bounds, third ? 0 : 1), roomy: third,
-    _answer: () => mergeSteps(answer).filter(l => !l.steps.every(k => given.has(k))).map(l => [l.a, l.b]),
+    _answer: () => mergeSteps(answer).filter(l => !l.steps.every(k => given.has(k))).map(l => [l.a, l.b, l.kind]),
+    setPen(k) { pen = k; render(); },
     check() {
       const r = compareDrawing(all(), answer);
       if (r.ok) return { ok: true };
       const extra = r.extraLines, miss = r.missingLines;
       for (const l of extra) board.line(l.a, l.b, 'signalThin', { id: 'x' + l.steps[0], hit: false });
       setTimeout(() => { for (const l of extra) board.remove('x' + l.steps[0]); }, 1800);
-      const back = extra.filter(isBack);
+      const back = item.hidden ? [] : extra.filter(isBack);
+      const pens = r.wrongKindLines;
+      for (const l of pens) board.line(l.a, l.b, 'signalFold', { id: 'x' + l.steps[0], hit: false });
+      setTimeout(() => { for (const l of pens) board.remove('x' + l.steps[0]); }, 1800);
       const parts = [];
       if (miss.length) parts.push(`${miss.length === 1 ? 'one line is' : `${miss.length} lines are`} still missing`);
       if (extra.length) parts.push(`${extra.length === 1 ? 'one line isn’t' : `${extra.length} lines aren’t`} part of this view`);
+      if (pens.length) parts.push(`${pens.length === 1 ? 'one line is' : `${pens.length} lines are`} in the right place but drawn with the wrong pen`);
       let note = 'Not quite: ' + parts.join(', and ') + '.';
       if (back.length) note += ` ${back.length === 1 ? 'The circled edge is real' : 'The circled edges are real'}, but ${back.length === 1 ? 'it is' : 'they are'} behind what you can see ${VIEWS[item.view].seen}.`;
-      const culprits = extra.slice(0, 2).map(l => ({ at: () => board.toClient(mid(l.a, l.b)), r: 16, note: isBack(l) ? 'round the back' : 'not in this view' }));
+      const culprits = [...extra.slice(0, 2).map(l => ({ at: () => board.toClient(mid(l.a, l.b)), r: 16, note: !item.hidden && isBack(l) ? 'round the back' : 'not in this view' })),
+        ...pens.slice(0, 2).map(l => ({ at: () => board.toClient(mid(l.a, l.b)), r: 16, note: answer.get(l.steps[0]) === 'hidden' ? 'out of sight: dashed' : 'in sight: solid' }))];
       return { ok: false, note, culprits };
     },
     hint(n) {
       if (n === 1) {
+        if (item.hidden) return { text: `First draw everything you can see ${VIEWS[item.view].seen}. Then turn the model and look for edges behind walls or round corners: each of them is a dashed line, at the place it would be if the walls were glass.` };
         if (third) return { text: item.view === 'top'
           ? 'Take each line of the front and side views and ask what it is: a roof edge, a ridge or a wall top. From above, each of them is a line too, at the same place across the building.'
           : 'Each height on the front view carries straight across to the side view, and each depth on the top view turns the corner to become a width on the side.' };
@@ -334,11 +388,11 @@ function drawingTask(item) {
       const r = compareDrawing(all(), answer);
       if (n === 2) {
         for (const k of r.extra) drawn.delete(k);
-        for (const k of r.wrongKind) drawn.delete(k);
+        for (const k of r.wrongKind) drawn.set(k, answer.get(k));
         render();
         const one = r.missingLines.slice(0, 1);
         showGuides(one);
-        return { text: r.extra.length ? 'The lines that don’t belong have gone, and one missing line is dashed in for you.' : 'One missing line is dashed in for you.' };
+        return { text: (r.extra.length ? 'The lines that don’t belong have gone' : r.wrongKind.length ? 'Lines in the wrong pen are fixed' : '') + (r.extra.length || r.wrongKind.length ? ', and one' : 'One') + ' missing line is marked in orange for you.' };
       }
       showGuides(mergeSteps(answer));
       setTimeout(clearGuides, 3500);
@@ -347,11 +401,12 @@ function drawingTask(item) {
     async solved() {
       clearGuides();
       for (const it of board.items()) if (/^(d\d|gc)/.test(String(it.id))) board.remove(it.id);
-      mergeSteps(answer).forEach((l, i) => board.line(l.a, l.b, 'profile', { id: 'ok' + i, hit: false }));
+      mergeSteps(answer).forEach((l, i) => board.line(l.a, l.b, l.kind === 'hidden' ? 'hiddenPen' : 'profile', { id: 'ok' + i, hit: false }));
+      glass.draw(mergeSteps(answer));
       if (third) { frameModel(model); await cast(model); }
-      await finale(model, raw.lines.filter(l => l.kind === 'seen').flatMap(l => l.parts3), item.view);
+      await finale(model, raw.lines.filter(l => item.hidden || l.kind === 'seen').flatMap(l => l.parts3), item.view);
     },
-    dispose() { offDraw(); offTap(); board.dispose(); closeCard(); model.dispose(); },
+    dispose() { offDraw(); offTap(); board.dispose(); closeCard(); glass.dispose(); model.dispose(); },
   };
 }
 
@@ -366,20 +421,25 @@ function errorTask(item) {
   const target = sheet.views[item.view];
   const model = addModel(sheet.solids, item.view);
   let m = null;
-  for (let t = 0; t < 20 && !m; t++) m = mistake(target, rng, { kinds: item.kinds || ['back', 'shift'], n });
+  const hid = { hidden: !!item.hidden };
+  for (let t = 0; t < 20 && !m; t++) m = mistake(target, rng, { kinds: item.kinds || ['back', 'shift'], n, ...hid });
   const wrongSteps = new Set(m.wrong.flatMap(w => w.steps));
   const board = openCard(viewName(item.view), plural(n, 'mistake'));
   board.setGrid('dots', grow(target.box, 1));
   const right = new Map([...m.steps].filter(([k]) => !wrongSteps.has(k)));
-  mergeSteps(right).forEach((l, i) => board.line(l.a, l.b, 'visible', { id: 'r' + i, line: l }));
-  m.wrong.forEach((w, i) => board.line(w.a, w.b, 'visible', { id: 'w' + i, wrong: i }));
+  const pen = k => k === 'hidden' ? 'fold' : 'visible';
+  mergeSteps(right).forEach((l, i) => board.line(l.a, l.b, pen(l.kind), { id: 'r' + i, line: l }));
+  m.wrong.forEach((w, i) => board.line(w.a, w.b, pen(w.kind), { id: 'w' + i, wrong: i }));
   const box = grow(target.box, 1);
   board.polygon([[box.x0, box.y0], [box.x1, box.y0], [box.x1, box.y1], [box.x0, box.y1]], { id: 'frame', fill: 'none', stroke: null, hit: false });
   board.fit();
   const found = new Set();
-  const WHY = { back: 'round the back', shift: 'out of place' };
+  const WHY = { back: 'round the back', shift: 'out of place', solid: 'should be dashed', dashed: 'should be solid' };
 
-  function sub() { frame.sub(`Someone drew this ${lower(viewName(item.view))} and made <em>${n === 1 ? 'one mistake' : `${n} mistakes`}</em>: a line for an edge you can’t see from here, or a line a step out of place. Compare it with the model and tap what is wrong.<span class="udp-count"><em>${found.size}</em> / ${n} found</span>`, true); }
+  function sub() {
+    if (item.hidden) return frame.sub(`Someone drew this ${lower(viewName(item.view))} with both pens and made <em>${n === 1 ? 'one mistake' : `${n} mistakes`}</em>: a line in the right place but in the wrong pen. Solid is for edges you can see, dashed for edges out of sight. Tap what is wrong.<span class="udp-count"><em>${found.size}</em> / ${n} found</span>`, true);
+    frame.sub(`Someone drew this ${lower(viewName(item.view))} and made <em>${n === 1 ? 'one mistake' : `${n} mistakes`}</em>: a line for an edge you can’t see from here, or a line a step out of place. Compare it with the model and tap what is wrong.<span class="udp-count"><em>${found.size}</em> / ${n} found</span>`, true);
+  }
 
   const offTap = onBoardTap(board, ev => {
     const h = board.hit(ev, { kinds: ['seg'], filter: it => it.line || it.wrong !== undefined, tol: 12 });
@@ -389,7 +449,7 @@ function errorTask(item) {
       if (found.has(i)) return;
       found.add(i);
       sfx.step(found.size - 1);
-      board.update('w' + i, { style: 'signalThin' });
+      board.update('w' + i, { style: w.kind === 'hidden' ? 'signalFold' : 'signalThin' });
       board.text(mid(w.a, w.b), WHY[w.why], { id: 'why' + i, signal: true, dy: -12, hit: false });
       if (w.from) board.line(w.from.a, w.from.b, 'signalFold', { id: 'fix' + i, hit: false });
       sub();
@@ -397,7 +457,7 @@ function errorTask(item) {
       return;
     }
     const l = h.item.line;
-    session.miss({ note: `That line is right: it is an edge you can see ${VIEWS[item.view].seen}.`, culprits: [{ at: () => board.toClient(mid(l.a, l.b)), r: 16 }] });
+    session.miss({ note: l.kind === 'hidden' ? `That line is right: the edge is there but out of sight ${VIEWS[item.view].seen}, so it is dashed.` : `That line is right: it is an edge you can see ${VIEWS[item.view].seen}.`, culprits: [{ at: () => board.toClient(mid(l.a, l.b)), r: 16 }] });
   });
 
   frame.title(TITLES.error, item.name);
@@ -417,11 +477,11 @@ function errorTask(item) {
     hint(k) {
       const x = left()[0];
       if (!x) return null;
-      if (k === 1) return { text: `Check each line against the model ${VIEWS[item.view].seen}. Is that edge in front where you can see it, and is it exactly where the drawing puts it?` };
+      if (k === 1) return { text: item.hidden ? `For each line, find its edge on the model. If you can see it ${VIEWS[item.view].seen}, it should be solid; if a wall is in the way, dashed.` : `Check each line against the model ${VIEWS[item.view].seen}. Is that edge in front where you can see it, and is it exactly where the drawing puts it?` };
       if (k === 2) return { text: 'Have a look around here.', culprits: [{ at: () => board.toClient(mid(x.w.a, x.w.b)), r: 46 }] };
       return { text: 'This one is ' + WHY[x.w.why] + '.', culprits: [{ at: () => board.toClient(mid(x.w.a, x.w.b)), r: 16 }] };
     },
-    solved: () => finale(model, target.raw.lines.filter(l => l.kind === 'seen').flatMap(l => l.parts3), item.view),
+    solved: () => finale(model, target.raw.lines.filter(l => item.hidden || l.kind === 'seen').flatMap(l => l.parts3), item.view),
     dispose() { offTap(); board.dispose(); closeCard(); model.dispose(); },
   };
 }
@@ -444,7 +504,7 @@ function whichTask(item) {
     o.off = off(i);
     const [ox, oy] = o.off;
     board.polygon([[ox - .8, oy - .8], [ox + W + .8, oy - .8], [ox + W + .8, oy + H + .8], [ox - .8, oy + H + .8]], { fill: 'none', stroke: null, id: 'opt' + i, opt: i });
-    mergeSteps(answerSteps(o.v)).forEach((l, n) => board.line([l.a[0] + ox, l.a[1] + oy], [l.b[0] + ox, l.b[1] + oy], 'visible', { id: `o${i}l${n}`, hit: false }));
+    mergeSteps(answerSteps(o.v, { hidden: !!item.hidden })).forEach((l, n) => board.line([l.a[0] + ox, l.a[1] + oy], [l.b[0] + ox, l.b[1] + oy], l.kind === 'hidden' ? 'fold' : 'visible', { id: `o${i}l${n}`, hit: false, dashed: l.kind === 'hidden' }));
     board.text([ox - 1.6, oy + H / 2], String.fromCharCode(65 + i), { id: 'tag' + i, color: '#e9e6df' });
   });
   board.fit();
@@ -456,13 +516,15 @@ function whichTask(item) {
     if (o.ok) { chosen = i; setOpt(i, 'signal'); session.check(); return; }
     o.out = true;
     setOpt(i, 'none');
-    board.items().filter(it => String(it.id).startsWith(`o${i}l`)).forEach(it => board.update(it.id, { style: 'guide' }));
+    board.items().filter(it => String(it.id).startsWith(`o${i}l`)).forEach(it => board.update(it.id, { style: it.dashed ? 'hidden' : 'guide' }));
     session.miss({ note: `Not ${String.fromCharCode(65 + i)}. That is the ${lower(viewName(item.view))} of a ${lower(DRAW_FORMS[o.key].name)}.` });
   }
   const offTap = onBoardTap(board, ev => { const h = board.hit(ev, { kinds: ['poly'], filter: it => it.opt !== undefined }); if (h) choose(h.item.opt); });
 
   frame.title(TITLES.which, item.name);
-  frame.sub(`Four buildings on the same footprint, so the outlines match. Only one drawing is the ${lower(viewName(item.view))} of this model. Tap the one you think it is.`);
+  frame.sub(item.hidden
+    ? `Four blocks with the same outline from the front. The dashed lines show what is behind it. Only one drawing is the ${lower(viewName(item.view))} of this model. Tap the one you think it is.`
+    : `Four buildings on the same footprint, so the outlines match. Only one drawing is the ${lower(viewName(item.view))} of this model. Tap the one you think it is.`);
   frame.tools([
     { id: 'look', label: 'Look', key: 'L', run: () => look(item.view) },
     { id: 'hint', label: 'Hint', key: 'H', run: () => session.hint() },
@@ -475,16 +537,16 @@ function whichTask(item) {
     _answer: () => opts.findIndex(o => o.ok),
     check: () => ({ ok: chosen >= 0 }),
     hint(n) {
-      if (n === 1) return { text: 'Follow the roof slopes on the model. Wherever two of them meet there is a line in the top view, and a slope that runs down to an eave has no line across it.' };
+      if (n === 1) return { text: item.hidden ? 'Turn the model and look behind the front wall. Where does a wall inside the block run back? Each one is a dashed line, at the same place across the drawing.' : 'Follow the roof slopes on the model. Wherever two of them meet there is a line in the top view, and a slope that runs down to an eave has no line across it.' };
       if (n === 2) {
         const o = opts.find(x => !x.ok && !x.out);
-        if (o) { o.out = true; board.items().filter(it => String(it.id).startsWith(`o${opts.indexOf(o)}l`)).forEach(it => board.update(it.id, { style: 'guide' })); }
+        if (o) { o.out = true; board.items().filter(it => String(it.id).startsWith(`o${opts.indexOf(o)}l`)).forEach(it => board.update(it.id, { style: it.dashed ? 'hidden' : 'guide' })); }
         return { text: 'One of the wrong drawings is greyed out for you.' };
       }
       const i = opts.findIndex(o => o.ok);
       return { text: 'It is this one.', culprits: [{ at: () => board.toClient([opts[i].off[0] + W / 2, opts[i].off[1] + H / 2]), r: 40 }] };
     },
-    solved: () => finale(model, viewOf(solids, item.view).lines.filter(l => l.kind === 'seen').flatMap(l => l.parts3), item.view),
+    solved: () => finale(model, viewOf(solids, item.view).lines.filter(l => item.hidden || l.kind === 'seen').flatMap(l => l.parts3), item.view),
     dispose() { offTap(); board.dispose(); closeCard(); model.dispose(); },
   };
 }

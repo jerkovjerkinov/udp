@@ -29,28 +29,38 @@ export function compareDrawing(drawn, answer) {
 
 const onBox = (l, b) => (l.a[0] === l.b[0] && (l.a[0] === b.x0 || l.a[0] === b.x1)) || (l.a[1] === l.b[1] && (l.a[1] === b.y0 || l.a[1] === b.y1));
 
-// the lines a 'complete' level hides: inner lines first, the outline last
-export function hiddenForComplete(view, rng, n) {
+// the lines a 'complete' level hides: inner lines first, the outline last;
+// on a hidden-line sheet the dashed lines go first, since they are the lesson
+export function hiddenForComplete(view, rng, n, { hidden = false } = {}) {
   const seen = view.lines.filter(l => l.kind === 'seen');
   const inner = shuffle(rng, seen.filter(l => !onBox(l, view.box))), outer = shuffle(rng, seen.filter(l => onBox(l, view.box)));
-  return [...inner, ...outer].slice(0, Math.min(n, seen.length - 1));
+  const dashed = hidden ? shuffle(rng, view.lines.filter(l => l.kind === 'hidden')) : [];
+  return [...dashed, ...inner, ...outer].slice(0, Math.min(n, seen.length - 1 + dashed.length));
 }
 
 // A drawing with mistakes: kinds of mistake an architect makes when drawing a view.
 //   back     an edge round the back drawn as if you could see it
 //   shift    a line drawn one step out of place
 //   drop     a line left out (only for 'which', where nothing is tapped)
+//   pen      on a hidden-line sheet: a hidden edge drawn solid, or a seen one dashed
 // Returns { steps, wrong: [{ a, b, kind, why }] } or null.
-export function mistake(view, rng, { kinds = ['back', 'shift'], n = 1 } = {}) {
-  const steps = new Map([...view.steps].filter(([, v]) => v === 'seen'));
+export function mistake(view, rng, { kinds = ['back', 'shift'], n = 1, hidden = false } = {}) {
+  const steps = new Map([...view.steps].filter(([, v]) => hidden || v === 'seen'));
   const wrong = [];
-  const seen = view.lines.filter(l => l.kind === 'seen');
+  const seen = view.lines.filter(l => hidden || l.kind === 'seen');
+  const pens = shuffle(rng, [...view.lines.filter(l => l.kind === 'hidden'), ...view.lines.filter(l => l.kind === 'seen' && !onBox(l, view.box))]);
   const backs = shuffle(rng, view.lines.filter(l => l.kind === 'hidden'));
   const b = view.box;
   const inBox = p => p[0] >= b.x0 && p[0] <= b.x1 && p[1] >= b.y0 && p[1] <= b.y1;
   for (let t = 0; t < 60 && wrong.length < n; t++) {
     const kind = kinds[randInt(rng, kinds.length)];
-    if (kind === 'back' && backs.length) {
+    if (kind === 'pen' && hidden && pens.length) {
+      const l = pens.shift();
+      if (wrong.some(w => w.from === l || w.steps.some(k => l.steps.includes(k)))) continue;
+      const to = l.kind === 'hidden' ? 'seen' : 'hidden';
+      for (const k of l.steps) steps.set(k, to);
+      wrong.push({ a: l.a, b: l.b, why: to === 'seen' ? 'solid' : 'dashed', steps: l.steps, kind: to });
+    } else if (kind === 'back' && backs.length && !hidden) {
       const l = backs.pop();
       const ks = stepsAny(l.a, l.b).filter(k => !steps.has(k));
       if (!ks.length) continue;
@@ -68,8 +78,8 @@ export function mistake(view, rng, { kinds = ['back', 'shift'], n = 1 } = {}) {
       const ks = stepsAny(a, bb);
       if (ks.some(k => steps.has(k))) continue;
       for (const k of l.steps) steps.delete(k);
-      for (const k of ks) steps.set(k, 'seen');
-      wrong.push({ a, b: bb, why: 'shift', steps: ks, from: l });
+      for (const k of ks) steps.set(k, l.kind);
+      wrong.push({ a, b: bb, why: 'shift', steps: ks, from: l, kind: l.kind });
     } else if (kind === 'drop') {
       const l = seen[randInt(rng, seen.length)];
       if (wrong.some(w => w.from === l) || onBox(l, b)) continue;

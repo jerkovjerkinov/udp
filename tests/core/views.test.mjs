@@ -73,14 +73,20 @@ for (const pk of PACKS) {
     for (const [v, s] of Object.entries(sh.views)) ok(!s.raw.offLattice.length, `${l.id} ${v}: every line ends on a lattice point`);
     ok(sh.bounds.x1 - sh.bounds.x0 <= SPAN && sh.bounds.y1 - sh.bounds.y0 <= SPAN, `${l.id}: the sheet fits (${sh.bounds.x1 - sh.bounds.x0} x ${sh.bounds.y1 - sh.bounds.y0})`);
     const t = sh.views[l.view];
-    if (l.task === 'complete') ok(hiddenForComplete(t, seededRng('complete:' + l.id + ':'), l.missing).length === l.missing, l.id + ': lines to complete');
+    const hid = { hidden: !!l.hidden };
+    if (l.hidden) ok(t.raw.lines.some(x => x.kind === 'hidden'), l.id + ': a hidden-line sheet has a hidden line to draw');
+    if (l.task === 'complete') {
+      const gone = hiddenForComplete(t, seededRng('complete:' + l.id + ':'), l.missing, hid);
+      ok(gone.length === l.missing, l.id + ': lines to complete');
+      if (l.hidden) ok(gone[0].kind === 'hidden', l.id + ': the line to add is the dashed one');
+    }
     if (l.task === 'error') {
-      const m = mistake(t, seededRng('error:' + l.id + ':'), { kinds: l.kinds, n: l.errors });
+      const m = mistake(t, seededRng('error:' + l.id + ':'), { kinds: l.kinds, n: l.errors, ...hid });
       ok(m, l.id + ': a drawing with mistakes can be made');
-      if (m) ok(!compareDrawing(m.steps, answerSteps(t)).ok, l.id + ': the mistakes are real');
+      if (m) ok(!compareDrawing(m.steps, answerSteps(t, hid)).ok, l.id + ': the mistakes are real');
     }
     if (l.task === 'which') {
-      const sigs = [l.form, ...l.options].map(k => signature(answerSteps(viewOf(drawForm(k), l.view))));
+      const sigs = [l.form, ...l.options].map(k => signature(answerSteps(viewOf(drawForm(k), l.view), hid)));
       ok(new Set(sigs).size === sigs.length, l.id + ': the four drawings differ');
       const boxes = [l.form, ...l.options].map(k => { const b = viewOf(drawForm(k), l.view).box; return (b.x1 - b.x0) + 'x' + (b.y1 - b.y0); });
       ok(new Set(boxes).size === 1, l.id + ': the four outlines match');

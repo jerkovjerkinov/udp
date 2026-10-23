@@ -12,6 +12,9 @@
 //   error      a drawn view with mistakes in it; tap them (errors: n, kinds)
 //   which      four drawings, one is the view of this model (options: other forms)
 //   third      no model: two views are given, draw the third (given: [views])
+//
+// hidden: true puts the second pen in the player's hand: edges you can't see
+// from this side are drawn too, dashed (pack D)
 
 const L = (id, task, form, view, opts = {}) => ({ id, task, form, view, ...opts });
 
@@ -69,5 +72,23 @@ export const PACKS = [
     L('C7', 'error', 'chimney-house', 'front', { errors: 1, kinds: ['back'], learn: 'The chimney stands on the back slope, so its lower part is hidden behind the front of the roof. Only the top of it shows from the front.' }),
     // showpiece: a chapel, its side from the front and the top
     L('C8', 'third', 'chapel', 'right', { given: ['front', 'top'], learn: 'From two views you worked out a whole chapel: the long roof, the tower in front and the spire on top.' }),
+  ] },
+  { id: 'D', name: 'Hidden lines', brief: 'Some edges are there but out of sight, behind a wall or round a corner. Draftspeople still draw them, as dashed lines, so that one view tells the whole truth about a building.', levels: [
+    // introduce: the step from the side; the one line to add is the dashed one
+    L('D1', 'complete', 'step', 'right', { hidden: true, missing: 1, learn: 'The lower step is behind the tall one, so its edge is hidden. It still gets drawn, dashed, so you know it is there.' }),
+    // the same idea on an L block from the front
+    L('D2', 'complete', 'ell', 'front', { hidden: true, missing: 1, learn: 'The inside corner of the L is round the back. A dashed line shows where it is without pretending you can see it.' }),
+    // develop: a whole view with its hidden line
+    L('D3', 'draw', 'ell-prism', 'front', { hidden: true, learn: 'Draw what you see with the solid pen first, then ask what is behind it. Each edge out of sight is one dashed line.' }),
+    // develop: two hidden walls
+    L('D4', 'draw', 'u-prism', 'front', { hidden: true, learn: 'The court is open at the back, so both of its inside walls are hidden from the front. Two dashed lines tell you the block is hollow.' }),
+    // twist: four drawings with the same outline; only the dashes differ
+    L('D5', 'which', 'ell-prism', 'front', { hidden: true, options: ['ell-prism-r', 'u-prism', 'slab'], learn: 'From the front all four outlines are the same box. Only the dashed lines told you what was behind it, and on which side.' }),
+    // twist, harder: a corner block, two hidden edges at once
+    L('D6', 'draw', 'corner', 'front', { hidden: true, learn: 'Behind the front corner, two edges meet out of sight. Hidden lines can meet and turn corners like any others.' }),
+    // breather: a drawing with one line in the wrong pen
+    L('D7', 'error', 'tee-prism', 'front', { hidden: true, errors: 1, kinds: ['pen'], learn: 'The place was right but the pen was wrong. Solid means you can see it from here; dashed means it is there, out of sight.' }),
+    // showpiece: the chimney, most of it hidden behind the roof
+    L('D8', 'draw', 'chimney-house', 'front', { hidden: true, learn: 'Most of the chimney stands behind the front slope. The dashed lines show how far down it goes before it meets the roof.' }),
   ] },
 ];
