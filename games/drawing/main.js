@@ -368,6 +368,11 @@ function drawingTask(item) {
   }
 
   const offDraw = board.drawSegments({ commit, constrain: (a, p) => clamp(p), readout: false, onSnap: () => sfx.tick?.() });
+  // the very first sheet shows the gesture once, along a line already drawn
+  const firstLine = item.id === 'A1' && !item.seed ? mergeSteps(given)[0] : null;
+  let demoStop = null;
+  const demoTimer = firstLine && setTimeout(() => { demoStop = board.demo(firstLine.a, firstLine.b); }, 900);
+  const stopDemo = () => { clearTimeout(demoTimer); demoStop?.(); };
   const offTap = onBoardTap(board, erase);
 
   frame.title(TITLES[item.task], item.name);
@@ -442,7 +447,7 @@ function drawingTask(item) {
       if (third) { frameModel(model); await cast(model); }
       await finale(model, raw.lines.filter(l => item.hidden || l.kind === 'seen').flatMap(l => l.parts3), item.view);
     },
-    dispose() { offDraw(); offTap(); board.dispose(); closeCard(); glass.dispose(); model.dispose(); },
+    dispose() { stopDemo(); offDraw(); offTap(); board.dispose(); closeCard(); glass.dispose(); model.dispose(); },
   };
 }
 

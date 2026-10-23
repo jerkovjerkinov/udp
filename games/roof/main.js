@@ -471,6 +471,9 @@ function drawTask(item, roof, { construct = false } = {}) {
   }
 
   const offDraw = board.drawSegments({ commit, constrain: snapLine, readout: false, onSnap: () => sfx.tick?.() });
+  // the first sheet with a pen shows the gesture once, along an eave
+  let demoStop = null;
+  const demoTimer = item.id === 'B1' && !item.seed && setTimeout(() => { const [a, b] = roof.eaves[0]; demoStop = board.demo(a, b); }, 900);
   const offTap = onBoardTap(board, erase);
 
   frame.title(construct ? TITLES.construct : TITLES.draw, item.name);
@@ -522,7 +525,7 @@ function drawTask(item, roof, { construct = false } = {}) {
       model.overlay('drawn', []);
       await finale(model);
     },
-    dispose() { offDraw(); offTap(); board.dispose(); closeCard(); model.dispose(); },
+    dispose() { clearTimeout(demoTimer); demoStop?.(); offDraw(); offTap(); board.dispose(); closeCard(); model.dispose(); },
   };
 }
 

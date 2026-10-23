@@ -263,6 +263,34 @@ export function createBoard(container, opts = {}) {
     }
   }
 
+  // A ghost finger draws from a to b, a few times over, to show the gesture
+  // without words; it stops the moment the player touches the sheet.
+  function demo(a, b, { times = 2, ms = 1300 } = {}) {
+    let raf = 0, t0 = 0, done = false;
+    const finger = mk('circle', { r: 13, fill: 'rgba(233,230,223,.16)', stroke: '#e9e6df', 'stroke-width': 1, 'stroke-opacity': .7 }, gOver);
+    const stop = () => {
+      if (done) return;
+      done = true; cancelAnimationFrame(raf); finger.remove(); ghost(null);
+      root.removeEventListener('pointerdown', stop, true);
+    };
+    root.addEventListener('pointerdown', stop, true);
+    const frame = t => {
+      if (done) return;
+      t0 ||= t;
+      const k = (t - t0) / (ms + 600), pass = Math.floor(k), f = Math.min(1, (k - pass) * (ms + 600) / ms);
+      if (pass >= times) return stop();
+      const e = f < .5 ? 2 * f * f : 1 - (-2 * f + 2) ** 2 / 2;
+      const p = [a[0] + (b[0] - a[0]) * e, a[1] + (b[1] - a[1]) * e];
+      const [x, y] = toPx(p);
+      finger.setAttribute('cx', fmt(x)); finger.setAttribute('cy', fmt(y));
+      finger.setAttribute('opacity', f >= 1 ? 0 : 1);
+      ghost(a, f >= 1 ? a : p, { readout: false });
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return stop;
+  }
+
   // ------------------------------------------------------------------
   // hit testing
   // ------------------------------------------------------------------
@@ -347,9 +375,10 @@ export function createBoard(container, opts = {}) {
   //   readout               true (length), false, or fn(length, a, b) -> text
   //   onStart(a), onSnap(q) optional: sound hooks
   function drawSegments({ commit, constrain, readout = true, onStart, onSnap, unitScale = 1, style = 'signalThin' } = {}) {
-    let a = null, last = null, loupe = null;
+    let a = null, last = null, loupe = null, touchDraw = false;
     const peek = (ev, b) => {
-      if (ev.pointerType !== 'touch') return;
+      touchDraw = ev.pointerType === 'touch';
+      if (!touchDraw) return;
       loupe ??= createLoupe(uid);
       const r = root.getBoundingClientRect();
       const [sx, sy] = toPx(b);
@@ -368,7 +397,7 @@ export function createBoard(container, opts = {}) {
         const b = last;
         loupe?.hide();
         ghost(null);
-        if (a && b && (a[0] !== b[0] || a[1] !== b[1])) commit?.(a, b);
+        if (a && b && (a[0] !== b[0] || a[1] !== b[1])) { commit?.(a, b); if (touchDraw) navigator.vibrate?.(8); }
         a = null; last = null;
       },
     });
@@ -399,7 +428,7 @@ export function createBoard(container, opts = {}) {
     remove(id) { const it = items.get(id); if (it) { it.els?.forEach(e => e.remove()); items.delete(id); } },
     clear() { for (const it of items.values()) it.els?.forEach(e => e.remove()); items.clear(); ghost(null); },
     items: () => [...items.values()],
-    fit, redraw, snap, hit, toWorld, toClient, toPx, ghost, onPointer, drawSegments,
+    fit, redraw, snap, hit, toWorld, toClient, toPx, ghost, onPointer, drawSegments, demo,
     // what the last fit framed (sheet units), and the px it wants for a width w
     extent: () => boundsOf(fitWhat),
     heightFor(w) {
