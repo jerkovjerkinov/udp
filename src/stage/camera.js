@@ -202,7 +202,8 @@ export function createCameraRig(host, options = {}) {
     if (!pts.length) return Promise.resolve(false);
     lastFrame = { what, opts: opts.bestYaw ? { ...opts, bestYaw: false } : opts };
     const r = opts.rect || host.rect();
-    const pad = opts.padding ?? 28;
+    // padding asked for a whole screen must not eat a short strip (a phone with its card open)
+    const pad = Math.min(opts.padding ?? 28, Math.min(r.w, r.h) * .12);
     let yaw = opts.yaw ?? motion?.goalYaw ?? st.yaw;
     const pitch = clampPitch(opts.pitch ?? st.pitch);
     if (opts.bestYaw && opts.yaw === undefined) {
