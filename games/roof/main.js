@@ -75,7 +75,7 @@ function parOf(item) {
 
 const packs = PACKS.map(pk => ({
   ...pk,
-  levels: pk.levels.map(l => ({ ...l, label: `${l.name} · ${TASK_TAGS[l.task]}`, par: parOf(l) })),
+  levels: pk.levels.map(l => ({ ...l, label: `${l.name} · ${TASK_TAGS[l.task]}`, par: parOf(l), note: l.learn })),
 }));
 
 // ------------------------------------------------------------------
