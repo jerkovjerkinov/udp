@@ -18,7 +18,7 @@ import { createSession } from '../../src/ui/session.js';
 import { wait } from '../../src/fx/tween.js';
 import { sfx } from '../../src/fx/sfx.js';
 import { seededRng, pick } from '../../src/core/rand.js';
-import { SHAPES, oriented, turn, tip, tipShown, drop, evaluate, WHY, ruleLines, RULE_NAMES, matchDrawings, levelFrom, cloneMods, K } from '../../src/core/stack.js';
+import { SHAPES, oriented, turn, tip, tipShown, drop, anchorOf, evaluate, WHY, ruleLines, RULE_NAMES, matchDrawings, levelFrom, cloneMods, K } from '../../src/core/stack.js';
 import { createStackView } from './view3d.js';
 import { PACKS } from './levels.js';
 
@@ -257,11 +257,25 @@ function createPlay(item, lv, { free = false } = {}) {
     }
     return null;
   }
+  // the drop that covers the pointed column: the module's anchor there, or, when that
+  // sticks out or breaks a rule, another of its cells there (so a tap near an edge still fits)
+  function dropNear(col) {
+    const cells = oriented(hand.type, hand.o), a = anchorOf(cells);
+    const foot = [...new Map(cells.map(c => [c[0] + ',' + c[1], c])).values()];
+    let best = null, rank = 9;
+    for (const c of [a, ...foot]) {
+      const r = drop(site, mods, cells, col[0] - (c[0] - a[0]), col[1] - (c[1] - a[1]), { skip: hand.id });
+      const k = !r.ok ? 2 : reasonFor(r.cells) ? 1 : 0;
+      if (k < rank) { best = r; rank = k; }
+      if (!k) break;
+    }
+    return best;
+  }
   let ghostAt = null;
   function updateGhost(col = lastCol) {
     lastCol = col;
     if (!hand || !col) { view.setGhost(null); label.set({ hidden: true }); ghostAt = null; return; }
-    const r = drop(site, mods, oriented(hand.type, hand.o), col[0], col[1], { skip: hand.id });
+    const r = dropNear(col);
     ghostAt = r;
     const why = r.ok ? reasonFor(r.cells) : WHY[r.why];
     const show = r.why !== 'site' || r.cells.some(c => c[0] >= 0 && c[1] >= 0 && c[0] < site.W && c[1] < site.D);
@@ -342,7 +356,9 @@ function createPlay(item, lv, { free = false } = {}) {
     refresh();
   }
 
+  let over = false;                      // solved: taps on the finished stack change nothing
   const offTap = stage.rig.onTap(e => {
+    if (over) return;
     const a = columnAt(e);
     if (!a) return;
     if (!hand) { if (a.id && canLift(a.id)) lift(a.id); return; }
@@ -491,6 +507,7 @@ function createPlay(item, lv, { free = false } = {}) {
     get ev() { return ev; },
     select, rotate,
     async solved() {
+      over = true;
       label.set({ hidden: true });
       view.setGhost(null);
       clearHint();

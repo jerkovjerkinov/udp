@@ -480,7 +480,7 @@ function whichTask(item, solid) {
   const tall = stage.rect.h > stage.rect.w * 1.2;
   const cands = solids.map((s, i) => {
     const lo = [0, 1].map(a => Math.min(...s.verts.map(v => v[a]))), hi = [0, 1].map(a => Math.max(...s.verts.map(v => v[a])));
-    const ox = tall ? cx + ((i % 2) - .5) * gap * 1.3 : cx - row / 2 + i * gap, oy = ny1 + 2.4 + (tall ? Math.floor(i / 2) * gap * 1.6 : 0);
+    const ox = tall ? cx + ((i % 2) - .5) * gap * 1.3 : cx - row / 2 + i * gap, oy = ny1 + 2.4 + (tall ? Math.floor(i / 2) * gap * 2 : 0);
     const placed = mapSolid(s, v => [ox + (v[0] - (lo[0] + hi[0]) / 2) * k, oy + (v[1] - (lo[1] + hi[1]) / 2) * k, v[2] * k]);
     const v = addView(placed);
     const tag = labels.add([ox, oy - 1.7, 0], String.fromCharCode(65 + i), { ink: true });

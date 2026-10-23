@@ -20,13 +20,14 @@ const ALL = { support: 1, daylight: 'any', terrace: 1, access: true };
 
 export const PACKS = [
   { id: 'A', name: 'Massing', brief: 'Fill the massing exactly. A module drops from above and stops on what is under it, so the order matters: what goes underneath goes first.', levels: [
-    M('A1', 'Two storeys', [[2, 2, 2]], 'studio corner flat'),
-    M('A2', 'Cube', [[2, 2], [2, 2]], 'corner studio square family'),
-    M('A3', 'Slab and tower', [[3, 1, 1], [1, 1, 1]], 'corner family tee studio'),
-    M('A4', 'Terraces', [[3, 2, 1], [3, 2, 1]], 'corner family tee step square'),
-    M('A5', 'Courtyard', [[2, 2, 2], [2, 0, 2], [2, 2, 2]], 'family tee step corner studio'),
-    M('A6', 'Stepped block', [[3, 3, 2, 1], [3, 2, 2, 1]], 'corner family tee step tripod twist'),
-    M('A7', 'Box', [[2, 2, 2], [2, 2, 2]], 'tripod twist corner family tee step'),
+    // A1: nothing to turn, nothing to get wrong; A2 needs one module stood on end (Tip)
+    M('A1', 'Two rooms', [[2, 2]], 'studio'),
+    M('A2', 'Two storeys', [[2, 2, 2]], 'studio corner flat'),
+    M('A3', 'Cube', [[2, 2], [2, 2]], 'corner studio square family'),
+    M('A4', 'Slab and tower', [[3, 1, 1], [1, 1, 1]], 'corner family tee studio'),
+    M('A5', 'Terraces', [[3, 2, 1], [3, 2, 1]], 'corner family tee step square'),
+    M('A6', 'Courtyard', [[2, 2, 2], [2, 0, 2], [2, 2, 2]], 'family tee step corner studio'),
+    M('A7', 'Stepped block', [[3, 3, 2, 1], [3, 2, 2, 1]], 'corner family tee step tripod twist'),
     M('A8', 'Soma cube', [[3, 3, 3], [3, 3, 3], [3, 3, 3]], 'corner family tee step tripod twist'),
   ] },
   { id: 'B', name: 'Support', brief: 'A module rests on the ground or on another module. Where nothing carries a cell it overhangs, and an overhang has a limit.', levels: [
