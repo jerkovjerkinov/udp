@@ -341,7 +341,8 @@ export function createSession({ def, frame, stage, redlines }) {
   function solvedSheet() {
     const marks = marksNow();
     const time = clock(secs), par = item.par ? clock(item.par) : '';
-    const rows = [['Hints / misses', `${hints} / ${misses}`, { mono: true }], ['Marks', marks.map(m => m ? '◆' : '◇').join(' '), { mono: true }]];
+    // the three marks: finished, under par, and clean (no hints, peeks or misses), the one to come back for
+    const rows = [['Hints / misses', `${hints} / ${misses}`, { mono: true }], [MARK_NAMES.join(' · '), marks.map(m => m ? '◆' : '◇').join(' '), { mono: true }]];
 
     if (mode === 'pack') {
       const { record, fresh } = recordLevel(progress, item.id, { marks, secs });
@@ -374,7 +375,7 @@ export function createSession({ def, frame, stage, redlines }) {
       const first = !s.daily[key];
       // the suite streak counts days, so record the day once and the game under its own key
       if (first) { s.daily[key] = { marks, secs }; recordDaily(s, item.date, { game: def.id }); saveSuite(s); }
-      const line = shareLine({ date: item.date, prefix: def.prefix, marks, time });
+      const line = shareLine({ date: item.date, name: def.name, marks, time, url: location.origin + location.pathname + '#daily=' + item.date });
       summary({
         headline: `<b>Daily sheet drawn.</b> ${esc(item.date)}`,
         note: first ? `That makes ${currentStreak(s, item.date)} day${currentStreak(s, item.date) === 1 ? '' : 's'} in a row.` : 'You already drew today’s sheet, so this one was practice.',
@@ -498,6 +499,8 @@ export function createSession({ def, frame, stage, redlines }) {
   };
 }
 
+
+const MARK_NAMES = ['done', 'par', 'clean'];
 
 function freshNote(fresh) {
   const names = ['finished the sheet', 'beat the par time', 'needed no hints and made no misses'];

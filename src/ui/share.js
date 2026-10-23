@@ -33,9 +33,13 @@ export function formatHash(h) {
 // a short random seed for a new generated puzzle (not for logic: only to name it)
 export const newSeed = () => Math.random().toString(36).slice(2, 7);
 
-// the spoiler-free line a player can paste: "UDP Daily · 2026-10-22 · D · ◆◆◇ · 00:41"
-export function shareLine({ date, prefix, marks, time }) {
-  return ['UDP Daily', date, prefix, marks.map(m => m ? '◆' : '◇').join(''), time].join(' · ');
+// the spoiler-free result a player can paste into a chat: what, how well, and a
+// link that opens the same sheet
+//   Unnamed Drawing Project · daily sheet 2026-10-22
+//   Developments ◆◆◇ 00:41
+//   https://…/games/developments/#daily=2026-10-22
+export function shareLine({ date, name, marks, time, url }) {
+  return [`Unnamed Drawing Project · daily sheet ${date}`, `${name} ${marks.map(m => m ? '◆' : '◇').join('')} ${time}`, url].filter(Boolean).join('\n');
 }
 
 export async function copyText(text) {

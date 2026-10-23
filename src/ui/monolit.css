@@ -219,7 +219,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .udp-sheetwrap .udp-headline { font-size: 30px; font-weight: 300; letter-spacing: -.02em; line-height: 1.1; margin: 0 0 14px; }
 .udp-sheetwrap .udp-headline b { font-weight: 500; }
 .udp-sheetwrap .udp-note { font-family: var(--f-note); font-style: italic; font-size: 16px; color: var(--grey1); margin: 0 0 12px; }
-.udp-share-line { font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em; color: var(--ink); margin: 0 0 6px; user-select: all; }
+.udp-share-line { font-family: var(--f-mono); font-size: 12px; letter-spacing: .06em; color: var(--ink); margin: 0 0 6px; user-select: all; white-space: pre-line; overflow-wrap: anywhere; }
 
 /* the title block (Çizim Seti), restyled: thin warm rules on a dark sheet */
 .udp-tb {
