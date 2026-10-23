@@ -21,14 +21,18 @@ export const loadProgress = game => ({ ...emptyProgress(), ...(read(KEY(game)) |
 export const saveProgress = (game, p) => write(KEY(game), p);
 
 // merge a finished attempt into a level record: marks are kept once earned
-export function recordLevel(p, id, { marks, secs }) {
+// star: the level's master goal met (index 3 in fresh when it is new)
+export function recordLevel(p, id, { marks, secs, star = false }) {
   const r = p.levels[id] || { marks: [false, false, false], best: null, attempts: 0 };
-  const before = r.marks.slice();
+  const before = r.marks.slice(), starBefore = !!r.star;
   r.marks = r.marks.map((m, i) => m || !!marks[i]);
+  if (star) r.star = true;
   r.attempts++;
   if (marks[0] && (r.best === null || secs < r.best)) r.best = secs;
   p.levels[id] = r;
-  return { record: r, fresh: [0, 1, 2].filter(i => r.marks[i] && !before[i]) };
+  const fresh = [0, 1, 2].filter(i => r.marks[i] && !before[i]);
+  if (r.star && !starBefore) fresh.push(3);
+  return { record: r, fresh };
 }
 
 export const marksOf = (p, id) => p.levels[id]?.marks || [false, false, false];

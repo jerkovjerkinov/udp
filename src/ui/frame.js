@@ -23,9 +23,11 @@ const h = (tag, cls, html) => {
 };
 export const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-// ◆◆◇: n earned of total, the ones in fresh (indices) drawn in the signal colour
-export function marksHTML(earned = [], fresh = []) {
-  return [0, 1, 2].map(i => `<i class="${earned[i] ? '' : 'is-open'}${fresh.includes(i) ? ' is-new' : ''}">${earned[i] ? '◆' : '◇'}</i>`).join('');
+// ◆◆◇: n earned of total, the ones in fresh (indices) drawn in the signal colour;
+// star: true / false for a level with a master goal (★ / ☆, fresh index 3), undefined for none
+export function marksHTML(earned = [], fresh = [], star) {
+  return [0, 1, 2].map(i => `<i class="${earned[i] ? '' : 'is-open'}${fresh.includes(i) ? ' is-new' : ''}">${earned[i] ? '◆' : '◇'}</i>`).join('')
+    + (star === undefined ? '' : `<i class="is-star${star ? '' : ' is-open'}${fresh.includes(3) ? ' is-new' : ''}">${star ? '★' : '☆'}</i>`);
 }
 
 export const clock = s => {
@@ -215,11 +217,11 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
       if (text && ms) msgTimer = setTimeout(() => frame.say(''), ms);
     },
     // top right: { sheet: 'D.04', label: 'PACK D · LEVEL 4 / 8', par: 'PAR 01:10', marks: [true,false,false], fresh: [] }
-    status({ sheet, label, par, marks, fresh } = {}) {
+    status({ sheet, label, par, marks, fresh, star } = {}) {
       if (sheet !== undefined) elSheet.textContent = sheet;
       if (label !== undefined) elLabel.textContent = label;
       if (par !== undefined) { elPar.textContent = par || ''; elDot.hidden = !par || !marks; }
-      if (marks !== undefined) { elMarks.innerHTML = marks ? marksHTML(marks, fresh || []) : ''; elDot.hidden = !marks || !elPar.textContent; }
+      if (marks !== undefined) { elMarks.innerHTML = marks ? marksHTML(marks, fresh || [], star) : ''; elDot.hidden = !marks || !elPar.textContent; }
     },
     timer(secs, { over = false, hidden = false } = {}) {
       elTimer.hidden = hidden;

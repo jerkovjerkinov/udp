@@ -603,6 +603,8 @@ const def = {
   generate,
   workshop: openWorkshop,
   dailyDifficulty: 5,
+  // the star: work it out in your head, without turning the folded stack round
+  master: { name: 'no turning', says: 'answered without turning the stack', still: true },
 };
 
 const session = createSession({ def, frame, stage, redlines: red });

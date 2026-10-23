@@ -177,6 +177,7 @@ function frameModel(m) {
 // look along the view, or back to the usual three-quarter view
 let looking = false;
 function look(view, on = !looking) {
+  if (on) session.turned();
   looking = on;
   const V = VIEWS[view];
   frame.tool('look', { active: on });
@@ -562,6 +563,8 @@ const def = {
   onSolved: () => task.solved?.(),
   generate,
   dailyDifficulty: 5,
+  // the star: see the view in your head, without turning the model or using Look
+  master: { name: 'no turning', says: 'drew it without turning the model', still: true, applies: it => it.task !== 'third' },
 };
 
 const session = createSession({ def, frame, stage, redlines: red });

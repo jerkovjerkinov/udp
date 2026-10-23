@@ -54,7 +54,7 @@ export function createCameraRig(host, options = {}) {
   let lastFrame = null;         // { what, opts } for re-framing on resize
   let motion = null;            // the running camera tween, if any
   let dragHandler = null;
-  const tapFns = new Set();
+  const tapFns = new Set(), turnFns = new Set();
 
   const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, .1, 1000);
   const persp = new THREE.PerspectiveCamera(30, 1, .1, 1000);
@@ -310,6 +310,7 @@ export function createCameraRig(host, options = {}) {
       if (!far || !o.orbit) return;
       gesture.kind = 'orbit';
       host.dom.parentElement?.classList.add('is-orbiting');
+      for (const fn of turnFns) fn();
     }
     const dt = Math.max(1, ev.timeStamp - gesture.t) / 1000;
     const dyaw = -dx * .0062, dpitch = dy * .0048;
@@ -377,12 +378,14 @@ export function createCameraRig(host, options = {}) {
     update, frame, frameTurn, reframe, setView, settle, victoryOrbit, setPerspective, stop,
     togglePerspective(anim = true) { return setPerspective(st.persp < .5, anim); },
     // rotate by whole yaw steps (keyboard), or tilt by degrees
-    step(n = 1) { return glide({ yaw: stepOf(st.yaw) - n * o.snap }, { duration: 520, easing: ease.backOut }); },
-    tilt(deg) { return setView(st.yaw, st.pitch + deg * D2R); },
+    step(n = 1) { for (const fn of turnFns) fn(); return glide({ yaw: stepOf(st.yaw) - n * o.snap }, { duration: 520, easing: ease.backOut }); },
+    tilt(deg) { for (const fn of turnFns) fn(); return setView(st.yaw, st.pitch + deg * D2R); },
     zoomBy(f) { zoomTo(st.scale * f); },
     // the yaw step the camera rests on (or is gliding to), in degrees
     get yawDeg() { return wrapPi(st.yaw) / D2R; },
     onTap(fn) { tapFns.add(fn); return () => tapFns.delete(fn); },
+    // fn() whenever the player turns the view: an orbit drag, or the turn and tilt keys
+    onTurn(fn) { turnFns.add(fn); return () => turnFns.delete(fn); },
     // fn(pointerdown event) -> null (orbit as usual) or { move(ev), end(ev, moved), cancel() }
     setDragHandler(fn) { dragHandler = fn; },
     set orbitEnabled(v) { o.orbit = !!v; },

@@ -741,6 +741,8 @@ const def = {
   generate,
   workshop: openWorkshop,
   dailyDifficulty: 6,
+  // the star: read the roof from where it stands, without turning it round
+  master: { name: 'no turning', says: 'read the roof without turning it', still: true, applies: it => ['which', 'error', 'name', 'draw'].includes(it.task) },
 };
 
 const session = createSession({ def, frame, stage, redlines: red });

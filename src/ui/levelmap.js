@@ -41,7 +41,7 @@ export function createLevelMap(o) {
         return `<li><button class="udp-level${isNext ? ' is-next' : ''}" data-level="${esc(l.id)}"${s.open ? '' : ' disabled'}>
           <span class="lv-no">${esc(sheetNo(pk.id, j))}</span>
           <span class="lv-name">${esc(l.label || l.name)}</span>
-          <span class="udp-marks">${marksHTML(marksOf(p, l.id))}</span>
+          <span class="udp-marks">${marksHTML(marksOf(p, l.id), [], l.master ? !!lp?.star : undefined)}</span>
           <span class="lv-best">${lp && lp.best !== null ? clock(lp.best) : l.par ? '<span title="par">' + clock(l.par) + '</span>' : ''}</span>
         </button></li>`;
       }).join('');

@@ -1,7 +1,7 @@
 // The flow round a game: which puzzle is on the table, the clock, the marks,
 // hints, strikes, the summary sheet, the level map, progress and share codes.
 // A game only knows how to build a puzzle, check it and give a hint; the
-// session decides what happens around that, the same way in all six games.
+// session decides what happens around that, the same way in every game.
 //
 // Modes
 //   pack       the hand-made levels, in packs of about eight
@@ -22,7 +22,13 @@
 //     workshop()                                   (optional: enter free play)
 //     modes: ['challenge', 'daily', 'workshop']    (optional: which modes the map offers)
 //     dailyDifficulty, challengeLength             (optional)
+//     master: { name, says, still, applies(item), test(item) }   (optional: a star for mastery)
 //   }
+//
+// The master goal is a star beside the three marks, on the levels it applies to:
+// with still, the star is for solving without turning the view (the camera tells
+// the session, and a game calls session.turned() for its own view buttons);
+// otherwise test(item) says whether it was met. Either way it needs no hints.
 
 import { sfx } from '../fx/sfx.js';
 import { clock, esc } from './frame.js';
@@ -47,9 +53,17 @@ export function createSession({ def, frame, stage, redlines }) {
   let mode = 'pack';
   let playing = false;      // clock running and input live
   let secs = 0, t0 = 0;     // time spent on this item; t0 = when the clock last started
-  let hints = 0, peeked = false, misses = 0;
+  let hints = 0, peeked = false, misses = 0, turned = false;
   let run = null;           // challenge: { i, strikes, splits, total, rng }
   let ticker = 0;
+
+  const masterOn = it => !!def.master && !!it && (def.master.applies ? !!def.master.applies(it) : true);
+  for (const pk of def.packs) for (const l of pk.levels) l.master = masterOn(l);
+  if (def.master?.still) stage?.rig?.onTurn?.(() => { if (item && !item.solved) turned = true; });
+  function starNow() {
+    if (!masterOn(item)) return undefined;
+    return hints === 0 && !peeked && (def.master.test ? !!def.master.test(item) : !turned);
+  }
 
   const now = () => performance.now() / 1000;
   const spent = () => secs + (playing && t0 ? now() - t0 : 0);
@@ -189,7 +203,7 @@ export function createSession({ def, frame, stage, redlines }) {
     map.hide();
     stopClock();
     item = next;
-    secs = 0; hints = 0; peeked = false; misses = 0;
+    secs = 0; hints = 0; peeked = false; misses = 0; turned = false;
     frame.say('');
     frame.delta('');
     def.load(item);
@@ -205,7 +219,7 @@ export function createSession({ def, frame, stage, redlines }) {
       const f = findLevel(item.id);
       const st = packStates(progress, def.packs).find(s => s.id === f.pack.id);
       frame.status({ sheet: item.sheet, label: `Pack ${f.pack.id} · ${f.i + 1} / ${f.pack.levels.length}`,
-        par: item.par ? 'Par ' + clock(item.par) : '', marks: marksOf(progress, item.id) });
+        par: item.par ? 'Par ' + clock(item.par) : '', marks: marksOf(progress, item.id), star: masterOn(item) ? !!progress.levels[item.id]?.star : undefined });
       frame.rule(st.solved / st.total);
       frame.run(null);
     } else if (mode === 'challenge') {
@@ -303,11 +317,11 @@ export function createSession({ def, frame, stage, redlines }) {
     frame.say('');
     sfx.done();
     // the player may leave during the finale: record the level, show nothing
-    const mine = item, left = { mode, marks: marksNow(), secs };
+    const mine = item, left = { mode, marks: marksNow(), star: starNow(), secs };
     try { await def.onSolved?.(item); } catch (e) { console.error(e); }
     checking = false;
     if (item !== mine) {
-      if (left.mode === 'pack') { recordLevel(progress, mine.id, { marks: left.marks, secs: left.secs }); saveProgress(def.id, progress); }
+      if (left.mode === 'pack') { recordLevel(progress, mine.id, { marks: left.marks, star: left.star, secs: left.secs }); saveProgress(def.id, progress); }
       return r;
     }
     if (mode === 'challenge') {
@@ -316,7 +330,7 @@ export function createSession({ def, frame, stage, redlines }) {
       run.i++;
       if (run.i >= runLength) endRun(true);
       else { status(); setTimeout(nextInRun, 250); }
-    } else solvedSheet();
+    } else solvedSheet(left.star);
     return r;
   }
 
@@ -338,23 +352,25 @@ export function createSession({ def, frame, stage, redlines }) {
     return [true, !item.par || secs <= item.par, hints === 0 && !peeked && misses === 0];
   }
 
-  function solvedSheet() {
+  function solvedSheet(star) {
     const marks = marksNow();
     const time = clock(secs), par = item.par ? clock(item.par) : '';
     // the three marks: finished, under par, and clean (no hints, peeks or misses), the one to come back for
     const rows = [['Hints / misses', `${hints} / ${misses}`, { mono: true }], [MARK_NAMES.join(' · '), marks.map(m => m ? '◆' : '◇').join(' '), { mono: true }]];
+    // the star, and what it asks for, so a player knows what to come back for
+    if (star !== undefined) rows.push(['Star · ' + def.master.name, star ? '★' : '☆', { mono: true }]);
 
     if (mode === 'pack') {
-      const { record, fresh } = recordLevel(progress, item.id, { marks, secs });
+      const { record, fresh } = recordLevel(progress, item.id, { marks, secs, star });
       saveProgress(def.id, progress);
-      frame.status({ marks: record.marks, fresh });
+      frame.status({ marks: record.marks, fresh, star: star === undefined ? undefined : !!record.star });
       const f = findLevel(item.id);
       const st = packStates(progress, def.packs).find(s => s.id === f.pack.id);
       const nxt = nextLevel(progress, def.packs);
       const lastInPack = f.i === f.pack.levels.length - 1;
       summary({
         headline: `<b>Drawn.</b> ${esc(item.name)}`,
-        note: item.note || (fresh.length ? freshNote(fresh) : null),
+        note: item.note || (fresh.length ? freshNote(fresh, def.master) : null),
         block: { drawing: item.name, sheet: item.sheet, scale: item.scale || '1:50', attempt: String(record.attempts),
           time, par, grade: st.done ? st.grade : (marks.filter(Boolean).length === 3 ? 'A' : marks.filter(Boolean).length === 2 ? 'B' : 'C'),
           gradeSignal: fresh.length > 0, rows: [...rows, ['Pack', `${f.pack.id} · ${st.solved}/${st.total}${st.done ? ' · grade ' + st.grade : ''}`, { mono: true }],
@@ -483,6 +499,8 @@ export function createSession({ def, frame, stage, redlines }) {
       route();
     },
     check, hint, miss,
+    // a game's own view button turned the view (the master goal of a still game)
+    turned: () => { if (item && !item.solved) turned = true; },
     // a peek (x-ray, show-the-answer, look underneath) costs the third mark like a hint
     peek() { peeked = true; },
     reset() { if (item && mode !== 'workshop') begin({ ...item, solved: false }); },
@@ -502,8 +520,8 @@ export function createSession({ def, frame, stage, redlines }) {
 
 const MARK_NAMES = ['done', 'par', 'clean'];
 
-function freshNote(fresh) {
-  const names = ['finished the sheet', 'beat the par time', 'needed no hints and made no misses'];
+function freshNote(fresh, master) {
+  const names = ['finished the sheet', 'beat the par time', 'needed no hints and made no misses', master ? 'earned the star: ' + master.says : 'earned the star'];
   const list = fresh.map(i => names[i]);
   return 'New ' + (list.length > 1 ? 'marks' : 'mark') + ': you ' + (list.length > 1 ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1] : list[0]) + '.';
 }

@@ -1099,6 +1099,8 @@ const def = {
   generate,
   workshop: openWorkshop,
   dailyDifficulty: 6,
+  // the star: fold it in your head, without turning the model, where the answer is on the sheet
+  master: { name: 'no turning', says: 'solved it without turning the model', still: true, applies: it => ['which', 'draw', 'fix'].includes(it.task) },
 };
 
 const session = createSession({ def, frame, stage, redlines: red });

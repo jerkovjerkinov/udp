@@ -179,6 +179,7 @@ function drawDrawings(board, card, ox) {
 function createEditor(board, start, { onChange, onHover } = {}) {
   let cols = clone(start).cols;
   const history = [];
+  let strokes = 0;
   let undraw = () => {}, locked = false, paint = null, hov = null;
   const now = () => ({ ...start, cols: cols.map(f => f ? f.slice() : null) });
   const W = start.W, D = start.D, H = start.H;
@@ -213,6 +214,7 @@ function createEditor(board, start, { onChange, onHover } = {}) {
       if (!a || locked) return;
       red.clear();
       history.push(cols.map(f => f && f.slice()));
+      strokes++;
       paint = { r: a.r, on: !has(a.i, a.r), last: a.i };
       set(a.i, a.r, paint.on);
       paint.on ? sfx.pencil() : sfx.tick();
@@ -241,6 +243,7 @@ function createEditor(board, start, { onChange, onHover } = {}) {
 
   return {
     get card() { return now(); },
+    get strokes() { return strokes; },
     set(c) { history.push(cols.map(f => f && f.slice())); cols = clone(c).cols; changed(); },
     toggle(i, r) { history.push(cols.map(f => f && f.slice())); set(i, r, !has(i, r)); changed(); },
     undo() { if (!history.length || locked) return; cols = history.pop(); sfx.tick(); changed(); },
@@ -423,8 +426,12 @@ function drawTask(item, want) {
   refresh();
 
   const wrongCol = () => differences(ed.card, want)[0];
+  // the fewest strokes: one drag along each run of columns that fold on the same row
+  let minStrokes = 0;
+  const rows = new Set(want.cols.flatMap(f => f || []));
+  for (const r of rows) for (let i = 0; i < want.W; i++) if (want.cols[i]?.includes(r) && !want.cols[i - 1]?.includes(r)) minStrokes++;
   return {
-    board, view, editor: ed,
+    board, view, editor: ed, minStrokes, strokes: () => ed.strokes,
     _play() { ed.set(want); },
     check() {
       const got = ed.card, diff = differences(got, want);
@@ -686,6 +693,8 @@ const def = {
   generate,
   workshop: openWorkshop,
   dailyDifficulty: 5,
+  // the star: fold every line of the card in one stroke, with nothing drawn twice or taken back
+  master: { name: 'fewest strokes', says: 'folded every line in a single stroke', applies: it => ['draw', 'plans'].includes(it.task), test: () => task?.strokes?.() <= task?.minStrokes },
 };
 
 const session = createSession({ def, frame, stage, redlines: red });

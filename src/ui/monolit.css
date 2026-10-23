@@ -101,6 +101,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .udp-marks i { font-style: normal; display: inline-block; transition: color .3s var(--ease), transform .3s var(--ease); }
 .udp-marks i.is-open { color: var(--grey3); }
 .udp-marks i.is-new { color: var(--signal); transform: scale(1.25); }
+.udp-marks i.is-star { margin-left: .4em; font-size: 1.25em; line-height: 1; vertical-align: -.06em; }
 
 /* ------------------------------------------------------------------ */
 /* game page: stage, overlay chrome                                    */
