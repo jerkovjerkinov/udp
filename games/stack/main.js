@@ -12,7 +12,7 @@ import { createStage } from '../../src/stage/stage.js';
 import { createPicker } from '../../src/stage/pick.js';
 import { createLabels } from '../../src/stage/labels.js';
 import { createLines } from '../../src/stage/lines.js';
-import { createFrame, esc } from '../../src/ui/frame.js';
+import { createFrame, esc, touchWords } from '../../src/ui/frame.js';
 import { createRedlines } from '../../src/ui/redline.js';
 import { createSession } from '../../src/ui/session.js';
 import { wait } from '../../src/fx/tween.js';
@@ -30,7 +30,7 @@ const red = createRedlines(stage);
 const picker = createPicker(stage);
 const labels = createLabels(stage);
 
-const TITLES = { fill: 'Fill the massing.', habitat: 'Make it habitable.', match: 'Match the drawings.', fix: 'Fix the stack.', optimise: 'Design for the score.' };
+const TITLES = { fill: 'Can you fill the volume?', habitat: 'Can people live here?', match: 'Build it from the drawings', fix: 'What went wrong here?', optimise: 'How good can it get?' };
 const TASK_TAGS = { fill: 'fill', habitat: 'habitat', match: 'drawings', fix: 'fix', optimise: 'optimise' };
 const GOAL_NAMES = { terrace: 'Roof garden', daylight: 'Windows' };
 const plural = (n, w) => `${n} ${n === 1 ? w : w + 's'}`;
@@ -158,7 +158,7 @@ function createPlay(item, lv, { free = false } = {}) {
     const ok = lv.task === 'fill' ? fillState() : null;
     // tray
     if (lv.task === 'fix') {
-      card.tray.innerHTML = `<p class="st-tray-note">${hand ? 'Drop it where every rule holds.' : 'Tap a module to lift it. Only one may move: lifting another puts the first back.'}</p>`;
+      card.tray.innerHTML = `<p class="st-tray-note">${touchWords(hand ? 'Now drop it somewhere every rule holds.' : 'Tap a module to pick it up. You can move one at a time; picking up another puts the first one back.')}</p>`;
     } else {
       card.tray.innerHTML = order.map((t, i) => `<button type="button" class="st-mod${hand?.type === t ? ' is-on' : ''}${counts[t] ? '' : ' is-out'}" data-type="${t}"${counts[t] ? '' : ' disabled'}>
         ${iconOf(t, orient[t] ?? 0)}<span class="st-mod-name"><b>${i + 1}</b> ${esc(SHAPES[t].name)}</span><span class="st-mod-n">${free ? '∞' : '×' + counts[t]}</span></button>`).join('');
@@ -173,7 +173,7 @@ function createPlay(item, lv, { free = false } = {}) {
     const rows = [];
     const n = mods.length;
     if (lv.task === 'fill') rows.push({ text: 'Massing', v: `${ok.inside} / ${lv.target.length}`, ok: ok.inside === lv.target.length && !ok.outside });
-    if (lv.task === 'fill' && ok.outside) rows.push({ text: 'Outside the massing', v: plural(ok.outside, 'cell'), ok: false });
+    if (lv.task === 'fill' && ok.outside) rows.push({ text: 'Outside the volume', v: plural(ok.outside, 'cell'), ok: false });
     if (lv.task !== 'fill') for (const r of ruleLines(rules)) {
       const bad = [...ev.fails.values()].filter(f => f.some(x => x.rule === r.rule)).length;
       rows.push({ text: `${RULE_NAMES[r.rule]} · ${r.text}`, v: n ? `${n - bad} / ${n}` : '—', ok: n > 0 && !bad });
@@ -192,13 +192,13 @@ function createPlay(item, lv, { free = false } = {}) {
     frame.layout();
     // sub line
     const sub = {
-      fill: `Fill the signal massing exactly. <em>${plural(left(), 'module')}</em> left.`,
-      habitat: `Place every module so every rule holds. <em>${plural(left(), 'module')}</em> left.`,
-      match: `Place the modules so the stack matches the plan and the front elevation. <em>${plural(left(), 'module')}</em> left.`,
-      fix: `${ev.failing.length ? `<em>${plural(ev.failing.length, 'module')}</em> ${ev.failing.length === 1 ? 'breaks' : 'break'} a rule.` : 'Every rule holds.'} Move one module so every rule holds.`,
-      optimise: `Every rule must hold, and the ${lv.goal ? GOAL_NAMES[lv.goal.kind].toLowerCase() : ''} score must reach <em>${lv.goal?.value}</em>.`,
+      fill: `${item.say || 'Fill the orange volume with modules, leaving no gaps. Each one drops from above, so think about what has to go in first.'}<span class="udp-count"><em>${left()}</em> ${left() === 1 ? 'module' : 'modules'} left</span>`,
+      habitat: `${item.say || 'Place every module so that each one follows the rules listed in the card.'}<span class="udp-count"><em>${left()}</em> ${left() === 1 ? 'module' : 'modules'} left</span>`,
+      match: `${item.say || 'Place the modules so the stack looks like the plan from above and the front drawing from the street.'}<span class="udp-count"><em>${left()}</em> ${left() === 1 ? 'module' : 'modules'} left</span>`,
+      fix: `${ev.failing.length ? `${ev.failing.length === 1 ? 'One module breaks' : `${ev.failing.length} modules break`} a rule.` : 'Every rule holds now.'} You may move just one module to put it right.`,
+      optimise: `Every rule still has to hold, and this time you are also aiming for a ${lv.goal ? GOAL_NAMES[lv.goal.kind].toLowerCase() : ''} score of <em>${lv.goal?.value}</em>.`,
     }[lv.task];
-    frame.sub(free ? `An open site: every module, every rule. ${plural(mods.length, 'module')} placed.` : sub, true);
+    frame.sub(free ? `An open site with every rule switched on. Build whatever you like.<span class="udp-count">${plural(mods.length, 'module')} placed</span>` : sub, true);
     frame.tool('undo', { off: !history.length });
     const done = lv.task === 'fix' ? !hand : !left();
     if (!free) frame.primary({ label: 'Check', run: () => session.check(), disabled: false, ready: done });
@@ -247,7 +247,7 @@ function createPlay(item, lv, { free = false } = {}) {
     const ev2 = evaluate(site, [...mods.filter(x => x.id !== m.id), m], rules);
     if (lv.task === 'fill') {
       const t = new Set(lv.target.map(c => K(...c)));
-      return cells.every(c => t.has(K(...c))) ? null : 'Outside the massing.';
+      return cells.every(c => t.has(K(...c))) ? null : 'This would stick out of the volume.';
     }
     const mine = ev2.fails.get(m.id);
     if (mine) return mine[0].text;
@@ -391,23 +391,23 @@ function createPlay(item, lv, { free = false } = {}) {
       if (s.outside) {
         const t = new Set(lv.target.map(c => K(...c)));
         const bad = mods.filter(m => m.cells.some(c => !t.has(K(...c)))).map(m => m.id);
-        return { ok: false, note: `${plural(s.outside, 'cell')} outside the massing.`, culprits: culpritsOf(bad) };
+        return { ok: false, note: `Part of the stack sticks out of the volume (${plural(s.outside, 'cell')}). Lift those modules and try them another way round.`, culprits: culpritsOf(bad) };
       }
-      return { ok: false, note: `${plural(lv.target.length - s.inside, 'cell')} of the massing still empty.` };
+      return { ok: false, note: `There is still room in the volume: ${plural(lv.target.length - s.inside, 'cell')} left empty.` };
     }
-    if (lv.task === 'fix' && hand) return { ok: false, note: 'Drop the module you are holding first.' };
+    if (lv.task === 'fix' && hand) return { ok: false, note: 'You are still holding a module. Drop it first, then check.' };
     if (!ev.ok) {
       const [id, f] = [...ev.fails][0];
       const name = SHAPES[mods.find(m => m.id === id).type].name;
       const by = f[0].by?.length ? ` (${f[0].by.map(b => SHAPES[mods.find(m => m.id === b)?.type]?.name.toLowerCase()).filter(Boolean).join(', ')} in the way)` : '';
-      return { ok: false, note: `${name}: ${f[0].text.replace(/\.$/, '')}${by}.`, culprits: culpritsOf(ev.failing) };
+      return { ok: false, note: `The ${name.toLowerCase()} doesn’t work yet. ${f[0].text.replace(/\.$/, '')}${by}.`, culprits: culpritsOf(ev.failing) };
     }
-    if (left()) return { ok: false, note: `${plural(left(), 'module')} still in the tray.` };
+    if (left()) return { ok: false, note: `There ${left() === 1 ? 'is still one module' : `are still ${left()} modules`} in the tray to place.` };
     if (lv.task === 'match') {
       const md = matchDrawings(mods, lv.drawings);
-      return { ok: false, note: !md.plan && !md.front ? 'Neither the plan nor the front elevation matches yet.' : !md.plan ? 'The front matches; the plan does not.' : 'The plan matches; the front elevation does not.' };
+      return { ok: false, note: !md.plan && !md.front ? 'Neither the plan nor the front view matches the drawings yet.' : !md.plan ? 'The front view matches, but seen from above it doesn’t match the plan.' : 'Seen from above it matches the plan, but the front view doesn’t match yet.' };
     }
-    if (lv.task === 'optimise') return { ok: false, note: `Every rule holds, but the ${GOAL_NAMES[lv.goal.kind].toLowerCase()} score is ${ev.score[lv.goal.kind]}; the goal is ${lv.goal.value}.` };
+    if (lv.task === 'optimise') return { ok: false, note: `Every rule holds. The ${GOAL_NAMES[lv.goal.kind].toLowerCase()} score is ${ev.score[lv.goal.kind]}, and you are aiming for ${lv.goal.value}.` };
     return { ok: false };
   }
 
@@ -438,34 +438,34 @@ function createPlay(item, lv, { free = false } = {}) {
   const occupied = () => new Set(mods.flatMap(m => m.cells.map(c => K(...c))));
   function hint(k) {
     if (k === 1) return { text: {
-      fill: 'Work from the bottom up: a module only drops onto what is under it. Fill the corners and the low parts first, and keep the awkward shapes for where they fit.',
-      habitat: 'Keep a gap of open ground in front of every window, and leave each module part of its roof. The overhang counts across the plan from the cells that are carried.',
-      match: 'Read the plan for where there is something, and the front for how high. A column high in the front can stand anywhere along its row.',
-      fix: 'The failing module is not always the one to move: something may stand in front of its window or on its roof.',
-      optimise: lv.goal?.kind === 'terrace' ? 'Every cell covered by another module is a garden lost. Spread the modules and step them like a hillside.' : 'Every cell face that sees out over open ground to the edge of the site is a window. Keep the stack thin and the ground in front of it open.',
+      fill: 'Work from the bottom up, because a module only drops onto what is under it. Fill the corners and low parts first, and save the awkward shapes for the places they fit.',
+      habitat: 'Leave open ground in front of each window, and keep part of every roof uncovered. An overhang is counted from the nearest cell that is carried.',
+      match: 'The plan tells you where something stands, and the front tells you how tall it is. A tall column in the front could stand anywhere along its row.',
+      fix: 'The module that breaks the rule isn’t always the one to move. Something else may be blocking its window or covering its roof.',
+      optimise: lv.goal?.kind === 'terrace' ? 'Every roof cell you cover is a garden lost. Spread the modules out and step them like a hillside.' : 'Every side that looks out over open ground to the edge of the site counts as a window. Keep the stack thin and the ground in front of it open.',
     }[lv.task] };
     const sol = lv.solution;
     if (lv.task === 'fix') {
       const [id, f] = [...ev.fails][0] || [];
-      if (k === 2) return { text: id ? `${SHAPES[mods.find(m => m.id === id).type].name}: ${f[0].text}` : 'Every rule holds already: drop what you hold.', culprits: id ? culpritsOf([id]) : [] };
+      if (k === 2) return { text: id ? `Look at the ${SHAPES[mods.find(m => m.id === id).type].name.toLowerCase()}. ${f[0].text}` : 'Every rule already holds, so you can drop what you are holding.', culprits: id ? culpritsOf([id]) : [] };
       const s = sol.find(m => m.id === lv.moved);
       showHint([s]);
       const now = mods.find(m => m.id === lv.moved) || null;
-      return { text: `Move the ${SHAPES[s.type].name.toLowerCase()}: the dashed outline is one place where every rule holds.`, culprits: now ? culpritsOf([now.id]) : [] };
+      return { text: `Move the ${SHAPES[s.type].name.toLowerCase()}. The dashed outline shows one place where every rule holds.`, culprits: now ? culpritsOf([now.id]) : [] };
     }
     const occ = occupied();
     const free = sol.filter(m => m.cells.every(c => !occ.has(K(...c))));
-    if (!free.length) return { text: 'Your stack has left the known solution: undo a few moves, or lift the modules in the way.' };
+    if (!free.length) return { text: 'Your stack has gone a different way from the solution I know. Undo a few moves, or lift the modules that are in the way.' };
     if (k === 2) {
       const m = free.find(x => counts[x.type] > 0) || free[0];
       showHint([m]);
-      return { text: `One way: a ${SHAPES[m.type].name.toLowerCase()} in the dashed outline.` };
+      return { text: `Try a ${SHAPES[m.type].name.toLowerCase()} in the dashed outline.` };
     }
     showHint(free);
-    return { text: `The dashed outlines are one solution: ${plural(free.length, 'module')} still to go.` };
+    return { text: `The dashed outlines show one full solution, with ${plural(free.length, 'module')} still to place.` };
   }
 
-  frame.title(free ? 'Workshop.' : TITLES[lv.task], item.name);
+  frame.title(free ? 'Free building' : TITLES[lv.task], item.name);
   frame.tools([
     { id: 'turn', label: 'Turn', key: 'E', keys: ['Q'], legend: 'Turn the module (Q back)', hidden: true, run: e => rotate(o => turn(o, e?.key?.toLowerCase() === 'q' ? -1 : 1)) },
     { id: 'tip', label: 'Tip', key: 'R', legend: 'Tip the module on its side', hidden: true, run: () => rotate(o => tipShown(hand.type, o)) },
@@ -578,8 +578,8 @@ function generate(rng, d) {
 
 const def = {
   id: 'stack', prefix: 'S', name: 'Stack',
-  lead: 'Each roof is another\'s garden.',
-  sub: 'Drop modules onto a site so the stack works as housing: every unit carried, lit, with a roof open to the sky and a way in.',
+  lead: 'Every roof can be someone’s garden.',
+  sub: 'Stack housing modules on a site so that every home is held up, gets daylight, has a bit of open roof and can be reached from the street.',
   packs, load,
   check: () => task.check(),
   hint: n => task.hint(n),

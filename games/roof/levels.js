@@ -52,7 +52,7 @@ const flipY = rows => [...rows].reverse();
 const turn = rows => [...rows[0]].map((_, i) => rows.map(r => r[i]).reverse().join(''));
 
 export const PACKS = [
-  { id: 'A', name: 'House', brief: 'One rectangle, then an L. Hips leave every outside corner at 45 degrees.', levels: [
+  { id: 'A', name: 'House', brief: 'A roof plan shows a roof from above. A ridge is the level line along the top, a hip runs up from an outside corner at 45 degrees, and a valley rises from an inside corner. Start with a rectangle, then an L.', levels: [
     L('A1', 'name', 'Pavilion', RECT),
     L('A2', 'which', 'Long house', LONG),
     L('A3', 'error', 'Pavilion', turn(RECT), { errors: 1 }),
@@ -62,7 +62,7 @@ export const PACKS = [
     L('A7', 'draw', 'L-house', flipX(ELL3)),
     L('A8', 'construct', 'Long house', LONG3),
   ] },
-  { id: 'B', name: 'L and T', brief: 'Inside corners bring valleys. A lower wing’s ridge stops on the main roof.', levels: [
+  { id: 'B', name: 'L and T', brief: 'Every inside corner brings a valley. When a wing is narrower, its ridge is lower and stops where it meets the main roof.', levels: [
     L('B1', 'name', 'T-school', TEE),
     L('B2', 'error', 'L-house', flipY(ELL2), { errors: 1 }),
     L('B3', 'which', 'T-school', TEE2),
@@ -72,7 +72,7 @@ export const PACKS = [
     L('B7', 'construct', 'L-house', ELL4),
     L('B8', 'brief', 'Two valleys', null, { brief: { valleys: 2, ridges: 1, maxModules: 18 }, size: [8, 6] }),
   ] },
-  { id: 'C', name: 'U and H', brief: 'Two wings and a body: ridges meet, valleys pair up.', levels: [
+  { id: 'C', name: 'U and H', brief: 'A body with two wings. Watch how the ridges meet and the valleys come in pairs.', levels: [
     L('C1', 'which', 'U-plan', YOU),
     L('C2', 'name', 'H-plan', AITCH),
     L('C3', 'error', 'U-plan', YOU2, { errors: 2 }),
@@ -82,7 +82,7 @@ export const PACKS = [
     L('C7', 'error', 'S-plan', flipX(ZED), { errors: 2 }),
     L('C8', 'brief', 'Four valleys', null, { brief: { valleys: 4, maxModules: 22 }, size: [8, 6] }),
   ] },
-  { id: 'D', name: 'Courtyards', brief: 'A roof round a void: valleys on the inside corners, the ridge goes all the way round.', levels: [
+  { id: 'D', name: 'Courtyards', brief: 'A roof that wraps around an open yard. The valleys sit at the inside corners, and the ridge runs all the way round.', levels: [
     L('D1', 'which', 'Courtyard house', COURT),
     L('D2', 'name', 'Courtyard house', COURT3),
     L('D3', 'draw', 'Courtyard house', COURT2),
@@ -92,7 +92,7 @@ export const PACKS = [
     L('D7', 'draw', 'Court and wing', COURT5),
     L('D8', 'brief', 'A courtyard', null, { brief: { courtyard: true, maxModules: 24 }, size: [7, 7] }),
   ] },
-  { id: 'E', name: 'Cross plans', brief: 'Churches and winged buildings: many valleys meeting a long ridge.', levels: [
+  { id: 'E', name: 'Cross plans', brief: 'Churches and buildings with wings, where many valleys meet one long ridge.', levels: [
     L('E1', 'which', 'Cross church', CROSS),
     L('E2', 'name', 'Basilica with transept', CHURCH),
     L('E3', 'error', 'Cross church', CROSS2, { errors: 3 }),
@@ -102,7 +102,7 @@ export const PACKS = [
     L('E7', 'error', 'Basilica with transept', turn(CHURCH), { errors: 3 }),
     L('E8', 'construct', 'Long basilica', CHURCH2),
   ] },
-  { id: 'F', name: 'Terraces and schools', brief: 'Long buildings that step and branch. The plan does not care how steep the roof is.', levels: [
+  { id: 'F', name: 'Terraces and schools', brief: 'Long buildings that step and branch. However steep the roof is, its plan stays the same.', levels: [
     L('F1', 'which', 'Terrace', TERRACE),
     L('F2', 'name', 'School', SCHOOL, { model: false }),
     L('F3', 'error', 'Terrace', flipX(TERRACE), { errors: 3 }),

@@ -20,10 +20,10 @@ import { loadProgress, loadSuite, today, currentStreak, dailyGame } from './prog
 export const GAMES = [
   { id: 'fold', prefix: 'F', family: 'Sheet', name: 'Fold & Punch', blurb: 'Fold a sheet, punch or cut it, and say where the holes land when it opens.', ready: true },
   { id: 'origamic', prefix: 'O', family: 'Sheet', name: 'Origamic', blurb: 'Cut and crease one sheet so that it stands up as a building when the card opens.', ready: true },
-  { id: 'developments', prefix: 'D', family: 'Solid', name: 'Developments', blurb: 'Cut solids open into nets, match the edges that glue, fold nets in your head.', ready: true },
-  { id: 'stack', prefix: 'S', family: 'Solid', name: 'Stack', blurb: 'Drop housing modules onto a site so every unit is carried, lit, has a roof garden and a way in.', ready: true },
+  { id: 'developments', prefix: 'D', family: 'Solid', name: 'Developments', blurb: 'Cut solids open into flat nets, find the edges that glue together, and fold nets in your head.', ready: true },
+  { id: 'stack', prefix: 'S', family: 'Solid', name: 'Stack', blurb: 'Stack housing on a site so every home is held up, gets daylight, keeps some open roof and has a way in.', ready: true },
   { id: 'roof', prefix: 'R', family: 'Building', name: 'Roof Plans', blurb: 'Grow roofs from footprints, read hips and valleys, and drain the rain.', ready: true },
-  { id: 'buildorder', prefix: 'B', family: 'Building', name: 'Build Order', blurb: 'Take a building apart and put it together again under real gravity: pull the wrong block and it comes down.', ready: true },
+  { id: 'buildorder', prefix: 'B', family: 'Building', name: 'Build Order', blurb: 'Take a building apart and put it back together under real gravity. Pull the wrong block and it comes down.', ready: true },
 ];
 const FAMILIES = [
   { id: 'Sheet', note: 'paper: folds, cuts, creases' },

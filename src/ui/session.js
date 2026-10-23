@@ -326,7 +326,7 @@ export function createSession({ def, frame, stage, redlines }) {
     sfx.error();
     misses++;
     if (r.culprits?.length) redlines?.show(r.culprits);
-    if (r.note) frame.say(r.note, { label: r.label || 'Check' });
+    if (r.note) frame.say(r.note, { label: r.label || 'Not quite' });
     if (mode === 'challenge' && r.strike !== false) {
       run.strikes++;
       status();
@@ -377,7 +377,7 @@ export function createSession({ def, frame, stage, redlines }) {
       const line = shareLine({ date: item.date, prefix: def.prefix, marks, time });
       summary({
         headline: `<b>Daily sheet drawn.</b> ${esc(item.date)}`,
-        note: first ? `Streak: ${currentStreak(s, item.date)} day${currentStreak(s, item.date) === 1 ? '' : 's'}.` : 'Already drawn today; this attempt is practice.',
+        note: first ? `That makes ${currentStreak(s, item.date)} day${currentStreak(s, item.date) === 1 ? '' : 's'} in a row.` : 'You already drew today’s sheet, so this one was practice.',
         block: { drawing: item.name, sheet: item.sheet, scale: '1:50', attempt: first ? '1' : 'Practice', time, par, grade: marks.filter(Boolean).length === 3 ? 'A' : 'B', rows },
         share: line,
         actions: [
@@ -430,7 +430,7 @@ export function createSession({ def, frame, stage, redlines }) {
     if (!item || item.solved || mode === 'workshop' || !def.hint) return null;
     const n = Math.min(3, hints + 1);
     const h = def.hint(n);
-    if (!h) { frame.say('No more hints for this sheet.', { ms: 2500 }); return null; }
+    if (!h) { frame.say('That was the last hint for this sheet.', { ms: 2500 }); return null; }
     hints = n;
     redlines?.clear();
     if (h.culprits?.length) redlines?.show(h.culprits);
@@ -500,6 +500,7 @@ export function createSession({ def, frame, stage, redlines }) {
 
 
 function freshNote(fresh) {
-  const names = ['drawn', 'under par', 'clean (no hint, no miss)'];
-  return 'New mark' + (fresh.length > 1 ? 's' : '') + ': ' + fresh.map(i => names[i]).join(', ') + '.';
+  const names = ['finished the sheet', 'beat the par time', 'needed no hints and made no misses'];
+  const list = fresh.map(i => names[i]);
+  return 'New ' + (list.length > 1 ? 'marks' : 'mark') + ': you ' + (list.length > 1 ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1] : list[0]) + '.';
 }

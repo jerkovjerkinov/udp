@@ -42,7 +42,8 @@ const labels = createLabels(stage);
 // helpers
 // ------------------------------------------------------------------
 
-const TITLES = { dismantle: 'Take it apart.', assemble: 'Put it together.', free: 'What comes out?', keep: 'Keep it up.', test: 'Stands or falls?' };
+const touchScreen = matchMedia('(pointer: coarse)').matches;
+const TITLES = { dismantle: 'Can you take it apart?', assemble: 'Can you put it together?', free: 'What can come out?', keep: 'How much can you take away?', test: 'Will it stand?' };
 const TASK_TAGS = { dismantle: 'take apart', assemble: 'put together', free: 'what comes out', keep: 'keep it up', test: 'stands or falls' };
 const plural = (n, w) => `${n} ${n === 1 ? w : w + 's'}`;
 const ARROW = { '+z': '↑', '-z': '↓', '+x': '→', '-x': '←', '+y': '↗', '-y': '↙' };
@@ -145,13 +146,14 @@ function partPointer(v, { can = () => true, onTap } = {}) {
 
 // why a part cannot move, in words
 function whyNot(m, r) {
-  if (r.why === 'keep') return 'That one has to stay up.';
-  if (r.why === 'falls') return `${namesOf(m, r.falling)} would come down.`;
-  if (r.why === 'rests') return `${m.byId.get(r.by).name} rests on it.`;
-  if (r.by === 'ground') return 'It cannot go down into the ground.';
-  return `${m.byId.get(r.by).name} is in the way.`;
+  if (r.why === 'keep') return 'That one is orange, so it has to stay up.';
+  if (r.why === 'falls') return `Without it, the ${lower(namesOf(m, r.falling))} would come down.`;
+  if (r.why === 'rests') return `The ${lower(m.byId.get(r.by).name)} is resting on it.`;
+  if (r.by === 'ground') return 'It can’t go down into the ground.';
+  return `The ${lower(m.byId.get(r.by).name)} is in the way.`;
 }
-const fellNote = (m, what, falling) => `${what}: ${namesOf(m, falling)} came down.`;
+const lower = s => s.charAt(0).toLowerCase() + s.slice(1);
+const fellNote = (m, what, falling) => `${what}, so the ${lower(namesOf(m, falling))} came down.`;
 
 // where a part waits off the building, on the line it travels along d: parts
 // that drop in rise with their height, parts that slide in stand off
@@ -235,10 +237,10 @@ function dismantleTask(item, m, V, { free = false } = {}) {
   function refresh() {
     const left = [...present].filter(id => m.goal.has(id)).length;
     log.note(`${total - left} of ${total} out`);
-    const tmp = temps.length ? ' The centering waits beside the site: tap it in when the stones need it, and strike it at the end.' : '';
+    const tmp = temps.length ? ' The timber centering waits beside the site. Tap it in when the stones need holding up, and take it away at the end.' : '';
     frame.sub(free
-      ? `A free site. Tap a part to take it out; what loses its support comes down. Rebuild puts everything back.${tmp} <em>${plural(present.size, 'part')}</em> standing.`
-      : `Tap the parts out one by one, along a way that is clear. Take out one that carries something and what it carried comes down.${tmp} <em>${plural(present.size, 'part')}</em> to go.`, true);
+      ? `Tap any part to take it out, and anything that loses its support comes down. Rebuild puts everything back.${tmp}<span class="udp-count"><em>${present.size}</em> standing</span>`
+      : `Take the building apart one piece at a time. A part can only leave by a clear path, and if it was holding something up, that comes down too.${tmp}<span class="udp-count"><em>${present.size}</em> to go</span>`, true);
   }
   function refuse(id, r, way) {
     ptr.clear();
@@ -286,7 +288,7 @@ function dismantleTask(item, m, V, { free = false } = {}) {
     }
     // it comes down, then everything goes back as it was
     await v.fly(id, [0, 0, 0], to, { duration: 520 });
-    const note = fellNote(m, `Without ${p.name}`, verdict.falling);
+    const note = fellNote(m, `You took out the ${lower(p.name)}`, verdict.falling);
     if (free) { frame.say(note, { ms: 3200 }); sfx.error(); } else session.miss({ note, label: 'Collapse' });
     await collapse(v, m, rest, verdict);
     present.add(id);
@@ -297,7 +299,7 @@ function dismantleTask(item, m, V, { free = false } = {}) {
   }
   const ptr = partPointer(v, { can: id => !busy && (present.has(id) || temps.includes(id)), onTap: take });
 
-  frame.title(free ? 'Workshop.' : TITLES.dismantle, item.name);
+  frame.title(free ? 'Free play' : TITLES.dismantle, item.name);
   frame.tools(free ? [] : [{ id: 'hint', label: 'Hint', key: 'H', run: () => session.hint() }]);
   viewKeys();
   refresh();
@@ -308,25 +310,25 @@ function dismantleTask(item, m, V, { free = false } = {}) {
     _order: () => (dismantleOrder(m, present, { stable: V.stable }) || []).map(x => x.id),
     check: () => ({ ok: !present.size }),
     hint(k) {
-      if (k === 1) return { text: `Start at the top. A part can come out when one way out (up, or along a side) is clear and nothing it carries would lose its support.${temps.length ? ' An arch without its keystone falls: give it back its centering first.' : ''}` };
+      if (k === 1) return { text: `Start at the top. A part can come out when it has a clear way out, up or to one side, and nothing it holds up would lose its support.${temps.length ? ' An arch without its keystone falls, so put the centering back under it first.' : ''}` };
       unhint();
       const next = dismantleOrder(m, present, { stable: V.stable });
       const mv = next?.[0];
-      if (!mv) return { text: 'Nothing can come out safely from here.' };
+      if (!mv) return { text: 'From here, nothing can come out without something falling.' };
       if (mv.op === 'in') {
         lastHint = mv.id;
         v.setState(mv.id, 'selected');
-        return { text: `Nothing comes out safely as it stands: put ${m.byId.get(mv.id).name} back in first.`, culprits: [{ at: at(v, mv.id), r: 30 }] };
+        return { text: `Nothing can come out safely as it is. Put the ${lower(m.byId.get(mv.id).name)} back in first.`, culprits: [{ at: at(v, mv.id), r: 30 }] };
       }
       if (k === 2) {
         lastHint = mv.id;
         v.setState(mv.id, 'selected');
-        return { text: `${m.byId.get(mv.id).name} can come out now.`, culprits: [{ at: at(v, mv.id), r: 26 }] };
+        return { text: `The ${lower(m.byId.get(mv.id).name)} can come out now.`, culprits: [{ at: at(v, mv.id), r: 26 }] };
       }
       const ids = next.slice(0, 3).filter(x => x.op === 'out').map(x => x.id);
       lastHint = ids;
       ids.forEach(id => v.setState(id, 'selected'));
-      return { text: `Next: ${ids.map(id => m.byId.get(id).name).join(', then ')}.`, culprits: ids.map(id => ({ at: at(v, id), r: 22 })) };
+      return { text: `Take out the ${ids.map(id => lower(m.byId.get(id).name)).join(', then the ')}.`, culprits: ids.map(id => ({ at: at(v, id), r: 22 })) };
     },
     rebuild: async () => {
       if (busy) return;
@@ -381,7 +383,7 @@ function assembleTask(item, m, V) {
     const temps = m.parts.filter(p => p.temp);
     const left = [...m.goal].filter(id => !present.has(id)).length;
     log.note(`${m.goal.size - left} of ${m.goal.size} in`);
-    frame.sub(`Tap the parts in, in an order that stands: a part set where nothing carries it comes down. ${temps.length ? 'Temporary works go in first and come out last: tap the centering again to strike it. ' : ''}<em>${plural(left, 'part')}</em> to go.`, true);
+    frame.sub(`Tap the parts in an order that keeps everything standing. A part placed where nothing holds it up will fall.${temps.length ? ' The timber centering goes in first and comes out last; tap it again to take it away.' : ''}<span class="udp-count"><em>${left}</em> to go</span>`, true);
     frame.tool('undo', { off: !done.length });
   }
   // the way in: along the part's own line if that is clear, else any clear one
@@ -404,7 +406,7 @@ function assembleTask(item, m, V) {
       // striking temporary works
       if (!p.temp) return;
       const r = slideOut(m, present, id);
-      if (!r.ok) { v.shake(id, DIRS[r.dir]); session.miss({ note: `Not yet: ${whyNot(m, r)}`, culprits: r.by && r.by !== 'ground' ? [{ at: at(v, r.by), r: 26 }] : [] }); return; }
+      if (!r.ok) { v.shake(id, DIRS[r.dir]); session.miss({ note: `Not yet. ${whyNot(m, r)}`, culprits: r.by && r.by !== 'ground' ? [{ at: at(v, r.by), r: 26 }] : [] }); return; }
       const rest = [...present].filter(x => x !== id);
       const verdict = V.check(rest);
       present.delete(id);
@@ -421,7 +423,7 @@ function assembleTask(item, m, V) {
         return;
       }
       await v.fly(id, [0, 0, 0], away(r.dir), { duration: 520 });
-      session.miss({ note: fellNote(m, `Struck too soon`, verdict.falling), label: 'Collapse' });
+      session.miss({ note: fellNote(m, 'The centering came out too soon', verdict.falling), label: 'Collapse' });
       await collapse(v, m, rest, verdict);
       present.add(id); done.pop(); log.pop(); refresh();
       await v.fly(id, away(r.dir), [0, 0, 0], { duration: 520 });
@@ -451,7 +453,7 @@ function assembleTask(item, m, V) {
       if (finished()) session.check();
       return;
     }
-    session.miss({ note: fellNote(m, `${p.name} in`, verdict.falling), label: 'Collapse' });
+    session.miss({ note: fellNote(m, `Nothing could hold the ${lower(p.name)} up yet`, verdict.falling), label: 'Collapse' });
     await collapse(v, m, after, verdict, new Map([[id, from]]));
     v.place(id, from);
     present.delete(id); done.pop(); log.pop(); refresh();
@@ -493,11 +495,11 @@ function assembleTask(item, m, V) {
     _order: () => (assemblyFrom(m, present, { stable: V.stable }) || []).map(x => x.id),
     check: () => ({ ok: finished() }),
     hint(k) {
-      if (k === 1) return { text: 'Build from the ground up. A part goes in when its way in is clear, and it stays only if what it lands on can carry it. Watch for a part that would close the way for another.' };
+      if (k === 1) return { text: 'Build from the ground up. A part can go in when its way in is clear, and it stays put only if what it lands on can hold it. Watch out for a part that would block the way for another.' };
       const next = assemblyFrom(m, present, { stable: V.stable });
       if (!next) {
         const back = [...done].reverse().find(d => d.op === 'in' && assemblyFrom(m, new Set([...present].filter(x => x !== d.id)), { stable: V.stable }));
-        return { text: back ? `This cannot be finished from here: take back ${m.byId.get(back.id).name} (Undo).` : 'This cannot be finished from here: undo a few steps.' };
+        return { text: back ? `It can’t be finished from here. Take the ${lower(m.byId.get(back.id).name)} back out with Undo.` : 'It can’t be finished from here. Undo a few steps and try another order.' };
       }
       const mv = next[0];
       lastHint = mv.id;
@@ -525,7 +527,7 @@ function freeTask(item, m, V) {
   frame.card(false);
 
   function refresh() {
-    frame.sub(`Mark every part that could come out right now: one way out is clear, and nothing comes down without it. <em>${plural(marked.size, 'part')}</em> marked.`, true);
+    frame.sub(`Tap every part that could come out right now, without anything falling. A part needs a clear way out, and nothing may depend on it.<span class="udp-count"><em>${marked.size}</em> marked</span>`, true);
     frame.primary({ label: 'Check', run: () => session.check(), disabled: !marked.size, ready: marked.size > 0 });
   }
   function toggle(id) {
@@ -551,17 +553,17 @@ function freeTask(item, m, V) {
       const parts = [];
       if (extra.length) {
         const r = verdictOf(extra[0]);
-        const why = r.ok ? `${namesOf(m, r.falling)} would come down` : whyNot(m, r).replace(/\.$/, '').toLowerCase();
-        parts.push(`${m.byId.get(extra[0]).name} cannot: ${why}`);
+        const why = r.ok ? `the ${lower(namesOf(m, r.falling))} would come down` : lower(whyNot(m, r).replace(/\.$/, ''));
+        parts.push(`the ${lower(m.byId.get(extra[0]).name)} can’t come out (${why})`);
       }
-      if (missing.length) parts.push(`${plural(missing.length, 'part')} that could ${missing.length === 1 ? 'is' : 'are'} not marked`);
-      return { ok: false, note: parts.join('; ') + '.', culprits: extra.slice(0, 3).map(id => ({ at: at(v, id), r: 24 })) };
+      if (missing.length) parts.push(`${missing.length === 1 ? 'one part that could come out isn’t' : `${missing.length} parts that could come out aren’t`} marked`);
+      return { ok: false, note: 'Not quite: ' + parts.join(', and ') + '.', culprits: extra.slice(0, 3).map(id => ({ at: at(v, id), r: 24 })) };
     },
     hint(k) {
-      if (k === 1) return { text: 'Look at each part from above and from the sides: is there one direction it can slide without touching anything, and would what it carries still stand without it?' };
-      if (k === 2) return { text: `${plural(answer.size, 'part')} can come out now.` };
+      if (k === 1) return { text: 'Look at each part from above and from the sides. Is there one direction it could slide out without touching anything, and would everything it holds up still stand without it?' };
+      if (k === 2) return { text: `${answer.size === 1 ? 'Just one part' : `${answer.size} parts`} can come out right now.` };
       const id = [...answer].find(x => !marked.has(x)) || [...answer][0];
-      return { text: `${m.byId.get(id).name} can.`, culprits: [{ at: at(v, id), r: 26 }] };
+      return { text: `The ${lower(m.byId.get(id).name)} is one of them.`, culprits: [{ at: at(v, id), r: 26 }] };
     },
     async solved() {
       ptr.clear();
@@ -592,7 +594,7 @@ function keepTask(item, m, V) {
 
   function refresh() {
     log.note(`${taken.length} of ${target}`);
-    frame.sub(`Take out as many parts as you can while the parts outlined in orange stay up. A part leaves along a clear way; take one that carries something and what it carried comes down. <em>${taken.length} of ${target}</em> out.`, true);
+    frame.sub(`Take out as many parts as you can while the orange parts stay standing. Each part needs a clear way out, and anything it holds up comes down with it.<span class="udp-count"><em>${taken.length}</em> / ${target} out</span>`, true);
     frame.tool('undo', { off: !taken.length });
     frame.rule(Math.min(1, taken.length / target));
   }
@@ -601,7 +603,7 @@ function keepTask(item, m, V) {
     if (busy || !present.has(id)) return;
     red.clear();
     const p = m.byId.get(id);
-    if (keep.has(id)) { v.shake(id, [0, 0, 1]); frame.say('That one has to stay up.', { ms: 2000 }); sfx.error(); return; }
+    if (keep.has(id)) { v.shake(id, [0, 0, 1]); frame.say('That one is orange, so it has to stay up.', { ms: 2000 }); sfx.error(); return; }
     const r = slideOut(m, present, id);
     if (!r.ok) {
       ptr.clear(); v.shake(id, DIRS[r.dir]);
@@ -625,7 +627,7 @@ function keepTask(item, m, V) {
       return;
     }
     await v.fly(id, [0, 0, 0], to, { duration: 520 });
-    session.miss({ note: fellNote(m, `Without ${p.name}`, verdict.falling), label: 'Collapse' });
+    session.miss({ note: fellNote(m, `You took out the ${lower(p.name)}`, verdict.falling), label: 'Collapse' });
     await collapse(v, m, rest, verdict);
     present.add(id);
     await v.fly(id, to, [0, 0, 0], { duration: 520 });
@@ -669,14 +671,14 @@ function keepTask(item, m, V) {
     _order: () => plan().slice(0, Math.max(0, target - taken.length)),
     check: () => ({ ok: taken.length >= target }),
     hint(k) {
-      if (k === 1) return { text: 'Look for parts that carry nothing the orange parts need: a beam carries on past a missing post as long as its weight stays between the posts that are left.' };
+      if (k === 1) return { text: 'Look for parts the orange ones don’t need. A beam can lose a post, as long as its weight still sits between the posts that are left.' };
       unhint();
       const next = plan();
-      if (taken.length + next.length < target) return { text: `From here only ${plural(taken.length + next.length, 'part')} can come out: undo a few and try another way.` };
+      if (taken.length + next.length < target) return { text: `From here, only ${plural(taken.length + next.length, 'part')} can come out in all. Undo a few and try another way.` };
       const ids = k === 2 ? next.slice(0, 1) : next.slice(0, 3);
       lastHint = ids;
       ids.forEach(id => v.setState(id, 'selected'));
-      return { text: k === 2 ? `${m.byId.get(ids[0]).name} can come out.` : `Next: ${ids.map(id => m.byId.get(id).name).join(', then ')}.`, culprits: ids.map(id => ({ at: at(v, id), r: 24 })) };
+      return { text: k === 2 ? `The ${lower(m.byId.get(ids[0]).name)} can come out.` : `Take out the ${ids.map(id => lower(m.byId.get(id).name)).join(', then the ')}.`, culprits: ids.map(id => ({ at: at(v, id), r: 24 })) };
     },
     solved: async () => { ptr.clear(); unhint(); await wait(300, { essential: true }); sfx.thud(); finaleView(first); await wait(1300, { essential: true }); },
     dispose() { ptr.dispose(); log.close(); frame.rule(0); v.dispose(); },
@@ -702,7 +704,7 @@ function testTask(item, m, V) {
     for (const id of temps) if (!c.with.includes(id)) v.show(id, false);
     stage.invalidate();
     const gone = namesOf(m, c.without), w = c.with.length ? ` The ${namesOf(m, c.with).toLowerCase()} is still under it.` : '';
-    frame.sub(`Version ${round + 1} of ${cases.length}: without ${gone} (dashed).${w} Does what is left stand? Press S or F.`, true);
+    frame.sub(`Imagine the dashed ${lower(gone)} taken away.${w} Would the rest still stand?${touchScreen ? '' : ' Press S for stands or F for falls.'}<span class="udp-count">${round + 1} / ${cases.length}</span>`, true);
   }
   async function answer(stands) {
     if (busy || round >= cases.length) return;
@@ -712,12 +714,12 @@ function testTask(item, m, V) {
     const ids = [...m.goal].filter(id => !c.without.includes(id)).concat(c.with);
     const right = stands === c.stands;
     if (c.stands) {
-      frame.say(right ? 'It stands.' : 'It stands: what is left still carries itself.', { label: right ? 'Right' : 'Stands' });
-      if (right) { sfx.snap(); wins++; } else session.miss({ note: 'It stands: what is left still carries itself.', label: 'Stands' });
+      frame.say(right ? 'Right, it stands.' : 'It stands. What is left can still hold itself up.', { label: right ? 'Right' : 'Stands' });
+      if (right) { sfx.snap(); wins++; } else session.miss({ note: 'It stands. What is left can still hold itself up.', label: 'Stands' });
       await wait(1400, { essential: true });
     } else {
-      if (right) { frame.say(`Right: ${namesOf(m, c.falling)} came down.`, { label: 'Falls' }); wins++; }
-      else session.miss({ note: `It falls: ${namesOf(m, c.falling)} came down.`, label: 'Falls' });
+      if (right) { frame.say(`Right, it falls. The ${lower(namesOf(m, c.falling))} came down.`, { label: 'Falls' }); wins++; }
+      else session.miss({ note: `It falls. The ${lower(namesOf(m, c.falling))} came down.`, label: 'Falls' });
       await collapse(v, m, ids, c);
     }
     round++;
@@ -743,10 +745,10 @@ function testTask(item, m, V) {
     hint(k) {
       const c = cases[round];
       if (!c) return null;
-      if (k === 1) return { text: 'Find what the missing part carried, and follow the weight down: does it still reach the ground inside what is left under it?' };
+      if (k === 1) return { text: 'Find what the missing part was holding up, then follow its weight down. Does it still reach the ground through what is left underneath?' };
       const carried = [...m.goal].filter(q => !c.without.includes(q) && m.byId.get(q).on.some(alt => alt.some(x => c.without.includes(x))));
-      if (k === 2) return { text: `It carried ${namesOf(m, carried) || 'nothing'}.`, culprits: carried.slice(0, 3).map(id => ({ at: at(v, id), r: 24 })) };
-      return { text: c.stands ? 'It stands.' : `It falls: ${namesOf(m, c.falling)}.` };
+      if (k === 2) return { text: carried.length ? `It was holding up the ${lower(namesOf(m, carried))}.` : 'It wasn’t holding anything up.', culprits: carried.slice(0, 3).map(id => ({ at: at(v, id), r: 24 })) };
+      return { text: c.stands ? 'It stands.' : `It falls, and the ${lower(namesOf(m, c.falling))} comes down.` };
     },
     solved: async () => { await wait(300, { essential: true }); for (const p of m.parts) v.show(p.id, m.goal.has(p.id)); finaleView(v.box()); await wait(1100, { essential: true }); },
     dispose() { v.dispose(); },
@@ -828,8 +830,8 @@ function generate(rng, d) {
 
 const def = {
   id: 'buildorder', prefix: 'B', name: 'Build Order',
-  lead: 'Take it apart. Put it together.',
-  sub: 'Real construction systems, part by part, under real gravity: a block leaves only along a clear way, and what it carried stays up only if the rest can hold it.',
+  lead: 'How buildings stand up.',
+  sub: 'Take real building systems apart and put them back together, piece by piece, under real gravity. Pull out the wrong piece and what it held up comes down.',
   packs,
   load,
   check: () => task.check(),

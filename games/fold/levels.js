@@ -12,7 +12,7 @@
 const L = (id, task, name, opts = {}) => ({ id, task, name, n: 4, folds: 1, ...opts });
 
 export const PACKS = [
-  { id: 'A', name: 'Halves', brief: 'One fold, one punch. Every hole has a twin across the crease.', levels: [
+  { id: 'A', name: 'Halves', brief: 'Fold the paper once and punch it once. When it opens, every hole has a twin on the other side of the crease.', levels: [
     L('A1', 'holes', 'In half'),
     L('A2', 'holes', 'In half again', { punches: 2 }),
     L('A3', 'mirror', 'The L', { shape: 'ell' }),
@@ -22,7 +22,7 @@ export const PACKS = [
     L('A7', 'mirror', 'The triangle', { shape: 'tri', folds: 2 }),
     L('A8', 'holes', 'Off centre', { n: 5, folds: 2 }),
   ] },
-  { id: 'B', name: 'Quarters', brief: 'Two folds make four layers, and four copies of the punch.', levels: [
+  { id: 'B', name: 'Quarters', brief: 'Two folds make four layers, so one punch leaves four holes.', levels: [
     L('B1', 'holes', 'Quarters', { folds: 2 }),
     L('B2', 'mirror', 'The F', { shape: 'eff', folds: 2 }),
     L('B3', 'cut', 'Two houses', { shape: 'house', folds: 1 }),
@@ -32,7 +32,7 @@ export const PACKS = [
     L('B7', 'cut', 'Steps', { shape: 'step', folds: 2 }),
     L('B8', 'holes', 'Six by six', { n: 6, folds: 2, punches: 2 }),
   ] },
-  { id: 'C', name: 'Diagonals', brief: 'A fold at 45 degrees turns the punch a quarter turn and mirrors it.', levels: [
+  { id: 'C', name: 'Diagonals', brief: 'Folding corner to corner, at 45 degrees, mirrors the punch and also turns it a quarter turn.', levels: [
     L('C1', 'holes', 'Corner to corner', { diagonals: true }),
     L('C2', 'holes', 'Triangle fold', { diagonals: true, folds: 2 }),
     L('C3', 'mirror', 'L on the slant', { shape: 'ell', diagonals: true, folds: 1 }),
@@ -42,7 +42,7 @@ export const PACKS = [
     L('C7', 'mirror', 'F on the slant', { shape: 'eff', diagonals: true, folds: 2 }),
     L('C8', 'cut', 'Flags', { shape: 'flag', diagonals: true, folds: 2 }),
   ] },
-  { id: 'D', name: 'Three folds', brief: 'Eight layers. Count them by orbiting the stack before you answer.', levels: [
+  { id: 'D', name: 'Three folds', brief: 'Three folds make eight layers. Turn the folded stack and count them before you answer.', levels: [
     L('D1', 'holes', 'Eighths', { folds: 3 }),
     L('D2', 'mirror', 'Eight Ls', { shape: 'ell', folds: 3 }),
     L('D3', 'holes', 'Eighths, two punches', { folds: 3, punches: 2, n: 6 }),
@@ -52,7 +52,7 @@ export const PACKS = [
     L('D7', 'holes', 'Folded slant', { folds: 3, diagonals: true, n: 6 }),
     L('D8', 'cut', 'Arches', { shape: 'arch', folds: 3, n: 6 }),
   ] },
-  { id: 'E', name: 'Lace', brief: 'Cuts against folded edges open into lace: snowflakes and chains of paper houses.', levels: [
+  { id: 'E', name: 'Lace', brief: 'Snip into the folded edges and the paper opens into lace, like snowflakes and chains of paper houses.', levels: [
     L('E1', 'cut', 'House chain', { shape: 'house', folds: 2, n: 6 }),
     L('E2', 'cut', 'Snowflake', { shape: 'notch', folds: 3, diagonals: true, n: 6 }),
     L('E3', 'mirror', 'Triangles on the slant', { shape: 'tri', folds: 3, diagonals: true, n: 6 }),
@@ -62,7 +62,7 @@ export const PACKS = [
     L('E7', 'reverse', 'Slanted pair', { diagonals: true, folds: 2 }),
     L('E8', 'cut', 'Arcade', { shape: 'arch', folds: 3, diagonals: true, n: 6 }),
   ] },
-  { id: 'F', name: 'Expert', brief: 'Four folds, off centre, slanted. One punch, sixteen holes.', levels: [
+  { id: 'F', name: 'Expert', brief: 'Four folds, some slanted and some off centre, so a single punch makes sixteen holes.', levels: [
     L('F1', 'holes', 'Sixteenths', { folds: 4, n: 8 }),
     L('F2', 'mirror', 'Sixteen Fs', { shape: 'eff', folds: 4, n: 8 }),
     L('F3', 'cut', 'Village', { shape: 'house', folds: 4, n: 8 }),

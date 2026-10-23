@@ -194,20 +194,20 @@ function wrongs(rng, n, steps, sheet, parts, q, correct) {
   });
   const flipped = l => det(l.f.M) < 0;
   const cands = shuffle(rng, [
-    [() => remap(l => [l.f.M[0], l.f.M[1], l.f.M[2], l.f.M[3]]), 'the shape only slides: it never flips'],
-    [() => remap(l => flipped(l) ? [-1, 0, 0, -1] : null), 'the flipped copies are turned, not mirrored'],
-    [() => remap(() => [0, -1, 1, 0]), 'every copy is a quarter turn out'],
-    [() => remap(l => flipped(l) ? null : [-1, 0, 0, 1]), 'mirrors the copies that should not be'],
+    [() => remap(l => [l.f.M[0], l.f.M[1], l.f.M[2], l.f.M[3]]), 'on that sheet the shape only slides along and never flips over'],
+    [() => remap(l => flipped(l) ? [-1, 0, 0, -1] : null), 'on that sheet the flipped copies are turned round instead of mirrored'],
+    [() => remap(() => [0, -1, 1, 0]), 'on that sheet every copy is a quarter turn out'],
+    [() => remap(l => flipped(l) ? null : [-1, 0, 0, 1]), 'that sheet mirrors copies that should stay the right way round'],
   ]);
   // the last fold the other way over
   const last = steps[steps.length - 1];
   const alt = replay(n, [...steps.slice(0, -1), { line: last.line, moving: -last.moving }]);
   const altSheet = alt[alt.length - 1];
-  if (insideBy(altSheet.outline, q) > .05) add(holesOf(altSheet, parts), 'the last fold went the other way');
+  if (insideBy(altSheet.outline, q) > .05) add(holesOf(altSheet, parts), 'that sheet is what you get if the last fold went the other way');
   // one fold fewer
   if (steps.length > 1) {
     const fewer = replay(n, steps.slice(0, -1));
-    add(holesOf(fewer[fewer.length - 1], parts), 'it forgets the last fold');
+    add(holesOf(fewer[fewer.length - 1], parts), 'that sheet leaves out the last fold');
   }
   for (const [make, why] of cands) add(make(), why);
   return shuffle(rng, out.slice(0, 2).concat(shuffle(rng, out.slice(2)))).slice(0, 3);

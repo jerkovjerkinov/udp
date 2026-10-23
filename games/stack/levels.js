@@ -19,10 +19,10 @@ const TER = { support: 1, terrace: 1 }, DT = { support: 1, daylight: 'any', terr
 const ALL = { support: 1, daylight: 'any', terrace: 1, access: true };
 
 export const PACKS = [
-  { id: 'A', name: 'Massing', brief: 'Fill the massing exactly. A module drops from above and stops on what is under it, so the order matters: what goes underneath goes first.', levels: [
+  { id: 'A', name: 'Massing', brief: 'Fill a volume with housing modules. Each one drops from above and comes to rest on whatever is below it, so the order you place them in matters.', levels: [
     // A1: nothing to turn, nothing to get wrong; A2 needs one module stood on end (Tip)
-    M('A1', 'Two rooms', [[2, 2]], 'studio'),
-    M('A2', 'Two storeys', [[2, 2, 2]], 'studio corner flat'),
+    { ...M('A1', 'Two rooms', [[2, 2]], 'studio'), say: 'Tap inside the orange volume to drop a module there. Fill it to finish.' },
+    { ...M('A2', 'Two storeys', [[2, 2, 2]], 'studio corner flat'), say: 'Lying flat, these modules won’t all fit. Use Tip to stand one on its end.' },
     M('A3', 'Cube', [[2, 2], [2, 2]], 'corner studio square family'),
     M('A4', 'Slab and tower', [[3, 1, 1], [1, 1, 1]], 'corner family tee studio'),
     M('A5', 'Terraces', [[3, 2, 1], [3, 2, 1]], 'corner family tee step square'),
@@ -30,7 +30,7 @@ export const PACKS = [
     M('A7', 'Stepped block', [[3, 3, 2, 1], [3, 2, 2, 1]], 'corner family tee step tripod twist'),
     M('A8', 'Soma cube', [[3, 3, 3], [3, 3, 3], [3, 3, 3]], 'corner family tee step tripod twist'),
   ] },
-  { id: 'B', name: 'Support', brief: 'A module rests on the ground or on another module. Where nothing carries a cell it overhangs, and an overhang has a limit.', levels: [
+  { id: 'B', name: 'Support', brief: 'Every module stands on the ground or on another module. A part with nothing under it is an overhang, and an overhang can only reach so far.', levels: [
     L('B1', 'habitat', 'First stack', { site: { W: 3, D: 2, H: 3 }, types: T('flat studio corner studio'), rules: S1 }),
     L('B2', 'match', 'From the drawings', { site: { W: 3, D: 3, H: 3 }, types: T('flat corner studio studio'), rules: S1 }),
     L('B3', 'habitat', 'Setback', { site: { W: 3, D: 3, H: 4, rows: [2, 3, 4] }, types: T('flat studio corner studio corner'), rules: S1 }),
@@ -40,7 +40,7 @@ export const PACKS = [
     L('B7', 'fix', 'Hanging', { site: { W: 4, D: 3, H: 4 }, types: T('flat corner studio family studio'), rules: S0, hard: true }),
     L('B8', 'habitat', 'Tight lot', { site: { W: 3, D: 2, H: 4 }, types: T('flat studio corner studio family'), rules: S0 }),
   ] },
-  { id: 'C', name: 'Daylight', brief: 'Every module needs a window: a side that looks out over open ground to the edge of the site. Later, it must face south, toward the street.', levels: [
+  { id: 'C', name: 'Daylight', brief: 'Every home needs a window, which means one side looking out over open ground to the edge of the site. Later the window has to face south, toward the street.', levels: [
     L('C1', 'habitat', 'Windows', { site: { W: 3, D: 3, H: 4 }, types: T('flat corner studio family studio'), rules: DAY }),
     L('C2', 'habitat', 'Dense', { site: { W: 3, D: 3, H: 4 }, types: T('flat corner studio family studio corner flat'), rules: DAY }),
     L('C3', 'match', 'Lit section', { site: { W: 4, D: 3, H: 3 }, types: T('flat corner studio family studio'), rules: DAY }),
@@ -50,7 +50,7 @@ export const PACKS = [
     L('C7', 'habitat', 'South front', { site: { W: 4, D: 4, H: 4 }, types: T('flat corner studio family studio corner flat'), rules: SUN }),
     L('C8', 'optimise', 'Most light', { site: { W: 4, D: 3, H: 4 }, types: T('flat corner studio family studio corner'), rules: SUN, goal: 'daylight' }),
   ] },
-  { id: 'D', name: 'Terrace', brief: 'Each unit\'s roof is another\'s garden: every module keeps roof cells open to the sky, and every one still needs its window.', levels: [
+  { id: 'D', name: 'Terrace', brief: 'One home’s roof can be another home’s garden. Every module keeps some of its roof open to the sky, and still needs its window.', levels: [
     L('D1', 'habitat', 'Roof garden', { site: { W: 3, D: 3, H: 4 }, types: T('flat corner studio family studio corner'), rules: TER }),
     L('D2', 'habitat', 'Light and air', { site: { W: 4, D: 3, H: 4 }, types: T('flat corner studio family studio corner'), rules: DT }),
     L('D3', 'fix', 'Overshadowed', { site: { W: 4, D: 4, H: 4 }, types: T('flat corner studio family studio corner'), rules: DT, hard: true }),
@@ -60,7 +60,7 @@ export const PACKS = [
     L('D7', 'optimise', 'Most garden', { site: { W: 4, D: 4, H: 4 }, types: T('flat corner studio family studio corner'), rules: DT, goal: 'terrace' }),
     L('D8', 'habitat', 'Hillside', { site: { W: 5, D: 4, H: 5, rows: [2, 3, 4, 5] }, types: T('flat corner studio family studio corner tee flat'), rules: { support: 1, daylight: 'any', terrace: 2 } }),
   ] },
-  { id: 'E', name: 'Access', brief: 'Every module needs a way in: it touches a circulation core, or the street at ground level. The cores run the full height.', levels: [
+  { id: 'E', name: 'Access', brief: 'Every home needs a way in. It has to touch a stair core, or the street at ground level. The cores run the full height of the building.', levels: [
     L('E1', 'habitat', 'The core', { site: { W: 4, D: 3, H: 4, cores: [[1, 2]] }, types: T('flat corner studio family studio'), rules: { support: 1, access: true } }),
     L('E2', 'habitat', 'Around the core', { site: { W: 4, D: 4, H: 5, cores: [[1, 2]] }, types: T('flat corner studio family studio corner'), rules: ALL }),
     L('E3', 'fix', 'No way in', { site: { W: 4, D: 4, H: 4, cores: [[2, 2]] }, types: T('flat corner studio family studio corner'), rules: ALL, hard: true }),
@@ -70,7 +70,7 @@ export const PACKS = [
     L('E7', 'optimise', 'Gardens on the core', { site: { W: 5, D: 4, H: 5, cores: [[2, 2]] }, types: T('flat corner studio family studio corner'), rules: ALL, goal: 'terrace' }),
     L('E8', 'habitat', 'Habitat', { site: { W: 5, D: 5, H: 5, cores: [[1, 3], [3, 1]] }, types: T('flat corner studio family studio corner flat tee'), rules: { support: 1, daylight: 'south', terrace: 2, access: true } }),
   ] },
-  { id: 'F', name: 'Drawings', brief: 'Plan and front elevation fix the stack; the rules decide how. Match both drawings with every rule in force, and design for the score.', levels: [
+  { id: 'F', name: 'Drawings', brief: 'Now the drawings come first. Build a stack that matches the plan and the front view while every rule still holds.', levels: [
     L('F1', 'match', 'Plan and front', { site: { W: 4, D: 4, H: 4 }, types: T('flat corner studio family studio corner'), rules: S1 }),
     L('F2', 'match', 'Lit from the drawings', { site: { W: 4, D: 4, H: 4 }, types: T('flat corner studio family studio corner'), rules: DAY }),
     L('F3', 'optimise', 'South gardens', { site: { W: 5, D: 4, H: 5, cores: [[2, 2]] }, types: T('flat corner studio family studio corner'), rules: { support: 1, daylight: 'south', terrace: 1, access: true }, goal: 'daylight' }),

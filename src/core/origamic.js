@@ -27,14 +27,14 @@ export function profileOf(folds) {
   const a = f[0], b = f[f.length - 1];
   const pieces = [];
   for (let i = 0; i + 1 < f.length; i++) pieces.push({ t: i % 2 ? 'F' : 'W', s0: f[i], s1: f[i + 1] });
-  if (f.length < 3) return { ok: false, a, b, pieces, why: 'a strip needs at least three folds: floor, the top edge, wall' };
-  if (a >= 0) return { ok: false, a, b, pieces, why: 'the first fold must be on the floor half' };
-  if (b <= 0) return { ok: false, a, b, pieces, why: 'the last fold must be on the wall half' };
-  if (pieces.length % 2) return { ok: false, a, b, pieces, why: 'an odd number of pieces: it cannot both rise from the floor and meet the wall' };
+  if (f.length < 3) return { ok: false, a, b, pieces, why: 'a strip needs at least three folds, one on the floor, one at the top edge and one on the wall' };
+  if (a >= 0) return { ok: false, a, b, pieces, why: 'its first fold has to be on the floor half of the card' };
+  if (b <= 0) return { ok: false, a, b, pieces, why: 'its last fold has to be on the wall half of the card' };
+  if (pieces.length % 2) return { ok: false, a, b, pieces, why: 'it has an odd number of pieces, so it can’t both rise from the floor and meet the wall' };
   const W = pieces.filter(p => p.t === 'W').reduce((s, p) => s + p.s1 - p.s0, 0);
   const F = pieces.filter(p => p.t === 'F').reduce((s, p) => s + p.s1 - p.s0, 0);
-  if (W !== b) return { ok: false, a, b, pieces, why: `the walls rise ${W} but the strip meets the wall at ${b}` };
-  if (F !== -a) return { ok: false, a, b, pieces, why: `the roofs reach back ${F} but the strip leaves the floor ${-a} out` };
+  if (W !== b) return { ok: false, a, b, pieces, why: `its walls add up to ${W}, but it meets the wall at ${b}` };
+  if (F !== -a) return { ok: false, a, b, pieces, why: `its roofs add up to ${F}, but it leaves the floor ${-a} out from the fold` };
   return { ok: true, a, b, pieces };
 }
 
@@ -313,17 +313,17 @@ export function readOptions(rng, card) {
       const f = nearProfile(rng, st.folds, card);
       if (!f) continue;
       for (let i = st.x0; i < st.x1; i++) c.cols[i] = f;
-      add(c, 'one strip has a different section');
+      add(c, 'one of its strips has a different section');
     } else if (r < .75 && st.x1 - st.x0 > 1) {
       c.cols[rng() < .5 ? st.x0 : st.x1 - 1] = null;
-      add(c, 'a strip is narrower');
+      add(c, 'one of its strips is narrower');
     } else {
       // the strip moves one column over
       const dx = rng() < .5 ? -1 : 1;
       if (st.x0 + dx < 0 || st.x1 + dx > card.W) continue;
       for (let i = st.x0; i < st.x1; i++) c.cols[i] = null;
       for (let i = st.x0; i < st.x1; i++) c.cols[i + dx] = st.folds;
-      add(c, 'a strip sits one column over');
+      add(c, 'one of its strips sits one column over');
     }
   }
   return shuffle(rng, [{ card, ok: true }, ...shuffle(rng, out).slice(0, 3)]);

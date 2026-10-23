@@ -35,7 +35,7 @@ const picker = createPicker(stage);
 // helpers
 // ------------------------------------------------------------------
 
-const TITLES = { holes: 'Where are the holes?', mirror: 'Which way round?', cut: 'Snip.', reverse: 'Fold it yourself.' };
+const TITLES = { holes: 'Where will the holes be?', mirror: 'Which way round?', cut: 'What will the cut make?', reverse: 'Can you fold it yourself?' };
 const TASK_TAGS = { holes: 'holes', mirror: 'which way round', cut: 'snip', reverse: 'fold it yourself' };
 const plural = (n, w) => `${n} ${n === 1 ? w : w.endsWith('ch') ? w + 'es' : w + 's'}`;
 const key = (i, j) => i + ',' + j;
@@ -220,7 +220,7 @@ function holesTask(item, q) {
   let busy = false;
 
   function refresh() {
-    frame.sub(`Watch it fold and punch, orbit the stack to count the layers, then mark every hole on the open sheet. <em>${plural(marked.size, 'hole')}</em> marked.`, true);
+    frame.sub(`Watch the paper fold and get punched. Turn the folded stack to count its layers, then tap every spot on the open sheet where a hole will be.<span class="udp-count"><em>${marked.size}</em> ${marked.size === 1 ? 'hole' : 'holes'} marked</span>`, true);
     frame.primary({ label: 'Open', run: () => session.check(), disabled: !marked.size, ready: false });
   }
   function toggle(k) {
@@ -249,17 +249,17 @@ function holesTask(item, q) {
       const extra = [...marked].filter(k => !want.has(k)), missing = [...want].filter(k => !marked.has(k));
       if (!extra.length && !missing.length) return { ok: true };
       const parts = [];
-      if (missing.length) parts.push(`${plural(missing.length, 'hole')} missing`);
-      if (extra.length) parts.push(`${plural(extra.length, 'mark')} where the paper stays whole`);
-      return { ok: false, note: parts.join(', ') + '.', culprits: extra.slice(0, 3).map(k => { const [i, j] = unkey(k); return { at: () => board.toClient([i + .5, j + .5]), r: 20 }; }) };
+      if (missing.length) parts.push(`${missing.length === 1 ? 'one hole is' : `${missing.length} holes are`} still missing`);
+      if (extra.length) parts.push(`${extra.length === 1 ? 'one mark is' : `${extra.length} marks are`} where the paper stays whole`);
+      return { ok: false, note: 'Not quite: ' + parts.join(', and ') + '.', culprits: extra.slice(0, 3).map(k => { const [i, j] = unkey(k); return { at: () => board.toClient([i + .5, j + .5]), r: 20 }; }) };
     },
     hint(k) {
-      if (k === 1) return { text: `There are ${plural(q.steps.length, 'fold')}, so the punch goes through up to ${2 ** q.steps.length} layers. Each opening fold mirrors every hole across its crease.` };
-      if (k === 2) { creasesOf(q.states).forEach((c, i) => board.line(c[0], c[1], 'signalFold', { id: 'hc' + i, hit: false })); return { text: 'The creases are dashed in on the open sheet.' }; }
+      if (k === 1) return { text: `With ${plural(q.steps.length, 'fold')}, the punch goes through as many as ${2 ** q.steps.length} layers. As each fold opens, every hole is mirrored across its crease.` };
+      if (k === 2) { creasesOf(q.states).forEach((c, i) => board.line(c[0], c[1], 'signalFold', { id: 'hc' + i, hit: false })); return { text: 'The creases are now dashed in on the open sheet.' }; }
       const k1 = [...want].find(x => !marked.has(x));
-      if (!k1) return { text: 'Every hole is marked. Take off the extra marks.' };
+      if (!k1) return { text: 'You have marked every hole. Now take off the extra marks.' };
       const [i, j] = unkey(k1);
-      return { text: 'One hole is here:', culprits: [{ at: () => board.toClient([i + .5, j + .5]), r: 20 }] };
+      return { text: 'There is a hole here.', culprits: [{ at: () => board.toClient([i + .5, j + .5]), r: 20 }] };
     },
     async solved() {
       busy = true;
@@ -297,7 +297,7 @@ function pickTask(item, q) {
     if (o.ok) { chosen = i; board.update('opt' + i, { fill: 'signal' }); session.check(); return; }
     o.out = true;
     board.update('opt' + i, { fill: 'rgba(15, 15, 14, .6)' });
-    session.miss({ note: `${String.fromCharCode(65 + i)}: ${o.why}.`, culprits: [{ at: () => board.toClient([o.off[0] + n / 2, o.off[1] + n / 2]), r: 30 }] });
+    session.miss({ note: `Not ${String.fromCharCode(65 + i)}: ${o.why}.`, culprits: [{ at: () => board.toClient([o.off[0] + n / 2, o.off[1] + n / 2]), r: 30 }] });
   }
   const offTap = onBoardTap(board, ev => { const h = board.hit(ev, { kinds: ['poly'], filter: it => it.opt !== undefined }); if (h) choose(h.item.opt); });
   const move = ev => {
@@ -310,9 +310,9 @@ function pickTask(item, q) {
   };
   board.el.addEventListener('pointermove', move);
 
-  const what = item.task === 'cut' ? `The scissors cut a ${SHAPES[q.shape].name} against a folded edge.` : `The punch is ${SHAPES[q.shape].name === 'L' || SHAPES[q.shape].name === 'F' ? 'an' : 'a'} ${SHAPES[q.shape].name}: it is not the same in a mirror.`;
+  const what = item.task === 'cut' ? `The scissors cut a ${SHAPES[q.shape].name} into the folded edge.` : `The punch is ${SHAPES[q.shape].name === 'L' || SHAPES[q.shape].name === 'F' ? 'an' : 'a'} ${SHAPES[q.shape].name}, which looks different in a mirror.`;
   frame.title(TITLES[item.task], item.name);
-  frame.sub(`${what} Which sheet opens out of it? Click it, or press A to D.`);
+  frame.sub(`${what} Which of these sheets will you see when it opens? Tap it, or press A to D.`);
   frame.tools([
     { id: 'replay', label: 'Replay', key: 'P', run: () => perf.run() },
     { id: 'hint', label: 'Hint', key: 'H', run: () => session.hint() },
@@ -326,14 +326,14 @@ function pickTask(item, q) {
     _answer: () => q.options.findIndex(o => o.ok),
     check: () => ({ ok: chosen >= 0 }),
     hint(k) {
-      if (k === 1) return { text: item.task === 'cut' ? 'A cut against a fold opens into a shape mirrored across that crease. Open the folds one at a time, last fold first.' : 'Open the last fold first. Each crease mirrors the shape, so after two folds two of the copies are mirrored and one is turned round.' };
+      if (k === 1) return { text: item.task === 'cut' ? 'A cut into a folded edge opens into a shape mirrored across that crease. Open the folds one at a time, starting with the last.' : 'Open the last fold first. Each crease mirrors the shape, so after two folds, two copies are mirrored and one is turned round.' };
       if (k === 2) {
         const o = q.options.find(x => !x.ok && !x.out);
         if (o) { o.out = true; board.update('opt' + q.options.indexOf(o), { fill: 'rgba(15, 15, 14, .6)' }); }
-        return { text: 'One wrong sheet is out.' };
+        return { text: 'One of the wrong sheets is crossed out for you.' };
       }
       const i = q.options.findIndex(o => o.ok);
-      return { text: 'This one:', culprits: [{ at: () => board.toClient([q.options[i].off[0] + n / 2, q.options[i].off[1] + n / 2]), r: 40 }] };
+      return { text: 'It is this one.', culprits: [{ at: () => board.toClient([q.options[i].off[0] + n / 2, q.options[i].off[1] + n / 2]), r: 40 }] };
     },
     async solved() {
       perf.cancel();
@@ -365,8 +365,8 @@ function reverseTask(item, q) {
   function refresh() {
     const left = q.punches - punches.length;
     frame.sub(punches.length
-      ? `${plural(punches.length, 'punch')} made. ${left > 0 ? `${left} more to go, or ` : ''}Open it to see.`
-      : `Fold the paper on the table until one punch makes the sheet on the board. Point at a crease line and click: the side under the pointer folds over. Click a cell to punch. ${q.punches > 1 ? `You have ${q.punches} punches.` : 'You have one punch.'}`);
+      ? `${left > 0 ? `You can punch ${left === 1 ? 'once more' : `${left} more times`}, or open` : 'Open'} the paper to see what you made.<span class="udp-count">${punches.length} / ${q.punches} ${q.punches === 1 ? 'punch' : 'punches'}</span>`
+      : `Fold the paper so that ${q.punches > 1 ? `${q.punches} punches make` : 'one punch makes'} the sheet shown on the board. Tap a crease line to fold the side you tapped over it, then tap a square to punch through.`, true);
     frame.primary({ label: 'Open', run: () => session.check(), disabled: !punches.length || busy, ready: punches.length === q.punches });
     frame.tool('undo', { off: !steps.length && !punches.length });
   }
@@ -427,7 +427,7 @@ function reverseTask(item, q) {
       fitTo(pv, r.sheet);
       busy = false;
     } else if (a.punch) {
-      if (!a.ok) { frame.say('Not on a crease: punch inside a cell.', { ms: 1800 }); sfx.error(); return; }
+      if (!a.ok) { frame.say('That’s right on a crease. Punch inside a square instead.', { ms: 2000 }); sfx.error(); return; }
       punches.push(a.punch);
       sfx.punch();
       const st = cur();
@@ -517,18 +517,18 @@ function reverseTask(item, q) {
         for (const k of got) board.remove('got' + k);
         await refold();
       })();
-      return { ok: false, note: `That makes ${plural(got.size, 'hole')}: ${missing.length ? `${missing.length} of the sheet’s are missing` : ''}${missing.length && extra.length ? ' and ' : ''}${extra.length ? `${extra.length} land where the sheet has none` : ''}.` };
+      return { ok: false, note: `That makes ${plural(got.size, 'hole')}. ${missing.length ? `${missing.length === 1 ? 'One hole' : `${missing.length} holes`} from the sheet ${missing.length === 1 ? 'is' : 'are'} missing` : ''}${missing.length && extra.length ? ', and ' : ''}${extra.length ? `${extra.length === 1 ? 'one lands' : `${extra.length} land`} where the sheet has none` : ''}.` };
     },
     hint(k) {
       const s = q.solution;
-      if (k === 1) return { text: `The sheet has ${plural(want.size, 'hole')} from ${plural(q.punches, 'punch')}, so the paper had ${want.size / q.punches} layers: ${s.steps.length} ${s.steps.length === 1 ? 'fold' : 'folds'}. Look for the lines the holes are mirrored across.` };
+      if (k === 1) return { text: `The sheet has ${plural(want.size, 'hole')} from ${plural(q.punches, 'punch')}, so the paper was ${want.size / q.punches} layers thick, which takes ${s.steps.length} ${s.steps.length === 1 ? 'fold' : 'folds'}. Look for the lines the holes are mirrored across.` };
       if (k === 2) {
         const c = chord(flatSheet(n).outline, s.steps[0].line);
         if (c) board.line(c[0], c[1], 'signalFold', { id: 'hint1', hit: false });
-        return { text: 'The first fold is dashed in on the board.' };
+        return { text: 'The first fold is now dashed in on the board.' };
       }
       creasesOf(s.states).forEach((c, i) => board.line(c[0], c[1], 'signalFold', { id: 'hc' + i, hit: false }));
-      return { text: 'Every crease of one folding that works is dashed in.' };
+      return { text: 'Every crease of one way that works is now dashed in.' };
     },
     async solved() { pv.setHover([]); pv.setMark([]); await openAll(); await wait(300); },
     dispose() { stage.canvas.removeEventListener('pointermove', move); stage.canvas.style.cursor = ''; board.dispose(); closeCard(); pv.dispose(); },
@@ -561,7 +561,7 @@ function load(item) {
   stage.clear();
   frame.primaryEl.style.display = item.task === 'holes' || item.task === 'reverse' ? '' : 'none';
   const q = question(item);
-  if (!q) { frame.sub('This sheet could not be folded. Try the next one.'); return; }
+  if (!q) { frame.sub('Something went wrong setting up this sheet. Please try the next one.'); return; }
   task = item.task === 'holes' ? holesTask(item, q) : item.task === 'reverse' ? reverseTask(item, q) : pickTask(item, q);
 }
 
@@ -573,7 +573,7 @@ function openWorkshop() {
   const item = { id: 'W', name: 'Free folding', n: 6, folds: 4, diagonals: true, punches: 99 };
   const q = { n: 6, punches: 99, holes: [], solution: { steps: [], punches: [], states: [flatSheet(6)] } };
   task = reverseTask(item, q);
-  frame.title('Workshop.', 'Free folding');
+  frame.title('Free folding', 'Any fold, any punch');
   frame.card(true, 'Workshop', 'fold, punch, open');
   frame.primary({ label: 'Open', run: () => task.check?.() });
 }
@@ -593,8 +593,8 @@ function generate(rng, difficulty) {
 
 const def = {
   id: 'fold', prefix: 'F', name: 'Fold & Punch',
-  lead: 'Fold, punch, open.',
-  sub: 'Real paper on the table: fold it, punch it with an L or an F, snip it with scissors, and see the sheet before it opens.',
+  lead: 'Fold it, punch it, open it.',
+  sub: 'Fold a sheet of paper, punch it or snip it, and work out what it will look like before it opens.',
   packs,
   load,
   check: () => task.check(),

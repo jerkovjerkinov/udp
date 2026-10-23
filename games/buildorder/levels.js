@@ -20,7 +20,7 @@
 const L = (id, task, name, build, opts = {}, extra = {}) => ({ id, task, name, build, opts, ...extra });
 
 export const PACKS = [
-  { id: 'A', name: 'Stone', brief: 'Posts and lintels, a colonnade, walls in bond. Dry stone stands by its weight alone: pull out the wrong block and what it carried comes down.', levels: [
+  { id: 'A', name: 'Stone', brief: 'Posts and beams of stone, a row of columns, and walls with overlapping blocks. Dry stone is held up by its own weight alone, so pull out the wrong block and what it carried comes down.', levels: [
     L('A1', 'dismantle', 'Trilithon', 'trilithon'),
     L('A2', 'free', 'Colonnade', 'colonnade', { n: 3 }),
     L('A3', 'assemble', 'Trilithon', 'trilithon', { span: 3 }),
@@ -30,7 +30,7 @@ export const PACKS = [
     L('A7', 'keep', 'A ruin', 'temple', { n: 4 }, { keep: '^p[lr]$', target: 5, order: 'c1 k1 s1_1 a1 s0_1' }),
     L('A8', 'dismantle', 'Temple front', 'temple', { n: 4 }),
   ] },
-  { id: 'B', name: 'Arches', brief: 'Voussoirs stand only on the centering until the keystone locks them; then the arch carries itself and pushes out on its piers.', levels: [
+  { id: 'B', name: 'Arches', brief: 'An arch’s wedge-shaped stones can’t stand on their own. They rest on a timber frame, the centering, until the keystone goes in at the top. Then the arch holds itself up and pushes outward on its supports.', levels: [
     L('B1', 'assemble', 'Round arch', 'arch', { m: 5 }),
     L('B2', 'test', 'Seven stones', 'arch', { m: 7 }),
     L('B3', 'dismantle', 'Taking down an arch', 'arch', { m: 7 }),
@@ -40,7 +40,7 @@ export const PACKS = [
     L('B7', 'assemble', 'Arcade of three', 'arcade', { count: 3 }),
     L('B8', 'test', 'Arcade', 'arcade', { count: 3 }),
   ] },
-  { id: 'C', name: 'Timber', brief: 'Posts, beams, joists, boards; plates, a ridge and rafters nailed to them. A beam carries on past a missing post as long as its weight stays between the ones left.', levels: [
+  { id: 'C', name: 'Timber', brief: 'Posts, beams, joists and boards, with a ridge and rafters nailed on top. A beam can lose a post, as long as its weight still sits between the posts that are left.', levels: [
     L('C1', 'dismantle', 'Deck', 'deck'),
     L('C2', 'free', 'Deck', 'deck', { joists: 4 }),
     L('C3', 'assemble', 'Pergola', 'pergola', { n: 3 }),
@@ -48,7 +48,7 @@ export const PACKS = [
     L('C5', 'dismantle', 'Gable roof', 'gableRoof'),
     L('C6', 'assemble', 'Gable roof', 'gableRoof'),
   ] },
-  { id: 'D', name: 'Joinery', brief: 'Halved joints, notched logs and keyed tenons hold by their shape: a piece leaves only along the way it went in.', levels: [
+  { id: 'D', name: 'Joinery', brief: 'Joints cut into the wood itself, like halved joints, notched logs and pegged tenons, hold by their shape. A piece can only come out the way it went in.', levels: [
     L('D1', 'dismantle', 'Half lap', 'halfLap', { n: 1 }),
     L('D2', 'assemble', 'Half lap', 'halfLap', { n: 2 }),
     L('D3', 'dismantle', 'Log crib', 'logCrib', { courses: 4 }),
@@ -57,7 +57,7 @@ export const PACKS = [
     L('D6', 'test', 'Log crib', 'logCrib', { courses: 5 }),
     L('D7', 'assemble', 'Lattice', 'halfLap', { n: 3 }),
   ] },
-  { id: 'E', name: 'Steel', brief: 'Columns, edge beams, cross beams, braces bolted on, and a deck. A brace slides out sideways; a beam lifts off its columns.', levels: [
+  { id: 'E', name: 'Steel', brief: 'Columns, beams, bolted braces and a floor deck. A brace slides out sideways, and a beam lifts off its columns.', levels: [
     L('E1', 'dismantle', 'Portal', 'steelFrame', { bays: 1, braced: false, deckOn: false }),
     L('E2', 'free', 'Braced bay', 'steelFrame', { bays: 1 }),
     L('E3', 'assemble', 'Braced bay', 'steelFrame', { bays: 1 }),
@@ -65,7 +65,7 @@ export const PACKS = [
     L('E5', 'keep', 'Fewest columns', 'steelFrame', { bays: 2 }, { keep: '^d', target: 7, order: 'x0_0 x0_1 c0_2_1 c0_0_0 c0_0_1 c0_2_0 t0_1' }),
     L('E6', 'assemble', 'Two storeys', 'steelFrame', { bays: 1, storeys: 2 }),
   ] },
-  { id: 'F', name: 'Dom-ino', brief: 'Slabs on columns, a stair beside, and a skin hung on the slab edges: the free plan, part by part. How few columns can a slab stand on?', levels: [
+  { id: 'F', name: 'Dom-ino', brief: 'Le Corbusier’s Dom-ino: floor slabs on columns, a stair to the side, and a skin hung on the slab edges. How few columns can a slab stand on?', levels: [
     L('F1', 'dismantle', 'Dom-ino', 'domino', { storeys: 1 }),
     L('F2', 'keep', 'Free plan', 'domino', { storeys: 1 }, { keep: '^(f|s\\d)$', target: 5, order: 'st c0_01 c0_20 c0_10 c0_11' }),
     L('F3', 'assemble', 'Dom-ino', 'domino', { storeys: 2 }),

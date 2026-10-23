@@ -38,7 +38,10 @@ export const clock = s => {
  *   game: id ('developments'), name: shown in the brand line, stage: from createStage
  */
 const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-const touchWords = t => touch ? t.replace(/,? or press [A-Z] to [A-Z]/g, '').replace(/\bClick\b/g, 'Tap').replace(/\bclick\b/g, 'tap').replace(/\bclicks\b/g, 'taps') : t;
+// the verb follows the device: tap on a touch screen, click with a mouse
+export const touchWords = t => touch
+  ? t.replace(/,? or press [A-Z] to [A-Z]/g, '').replace(/\bClick\b/g, 'Tap').replace(/\bclick(s?)\b/g, 'tap$1')
+  : t.replace(/\bTap\b/g, 'Click').replace(/\btap(s?)\b/g, 'click$1');
 
 export function createFrame({ game, name, stage, hubHref = '../../index.html' }) {
   document.body.classList.add('udp-app-page');
@@ -207,7 +210,7 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
     // a short italic message under the sub text; kind 'k' prefix label; clears after ms
     say(text, { label = '', ms = 0 } = {}) {
       clearTimeout(msgTimer);
-      elMsg.innerHTML = text ? (label ? `<span class="udp-k">${esc(label)}</span>` : '') + esc(text) : '';
+      elMsg.innerHTML = text ? (label ? `<span class="udp-k">${esc(label)}</span>` : '') + esc(touchWords(text)) : '';
       elMsg.classList.toggle('is-on', !!text);
       if (text && ms) msgTimer = setTimeout(() => frame.say(''), ms);
     },

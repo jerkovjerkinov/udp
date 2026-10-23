@@ -148,9 +148,9 @@ export function drop(site, mods, cells, ax, ay, { skip = null } = {}) {
 }
 
 export const WHY = {
-  site: 'Outside the site.',
-  core: 'A core is in the way.',
-  limit: 'Above the height limit.',
+  site: 'This would hang off the edge of the site. Try Turn or Tip.',
+  core: 'A stair core is in the way here.',
+  limit: 'This would go above the height limit.',
 };
 
 // ------------------------------------------------------------------
@@ -176,11 +176,11 @@ export function evaluate(site, mods, rules = {}) {
     const bottoms = m.cells.filter(c => !own.has(K(c[0], c[1], c[2] - 1)));
     const below = c => occ.get(K(c[0], c[1], c[2] - 1));
     const borne = bottoms.filter(c => c[2] === 0 || (below(c) && below(c) !== 'core'));
-    if (!borne.length) fail(m.id, { rule: 'support', text: 'Nothing under it.', by: [] });
+    if (!borne.length) fail(m.id, { rule: 'support', text: 'Nothing is holding it up.', by: [] });
     else if (rules.support != null) {
       let far = 0;
       for (const c of bottoms) if (!borne.includes(c)) far = Math.max(far, Math.min(...borne.map(b => Math.abs(b[0] - c[0]) + Math.abs(b[1] - c[1]))));
-      if (far > rules.support) fail(m.id, { rule: 'support', text: rules.support ? `It overhangs ${far} cells; ${rules.support} at most.` : 'Every cell must stand on something: no overhang.', by: [] });
+      if (far > rules.support) fail(m.id, { rule: 'support', text: rules.support ? `It sticks out ${far} cells past what holds it up, and only ${rules.support} is allowed.` : 'Every part of it has to stand on something here. No overhangs.', by: [] });
     }
     // daylight: side faces that look over open ground to the edge of the site
     const faces = [], blockers = new Set();
@@ -197,7 +197,7 @@ export function evaluate(site, mods, rules = {}) {
     }
     lit.set(m.id, faces);
     daylight += faces.length;
-    if (rules.daylight && !faces.length) fail(m.id, { rule: 'daylight', text: rules.daylight === 'south' ? 'No window faces south over open ground.' : 'No window looks out over open ground.', by: [...blockers] });
+    if (rules.daylight && !faces.length) fail(m.id, { rule: 'daylight', text: rules.daylight === 'south' ? 'None of its sides looks south over open ground, so it has no south window.' : 'None of its sides looks out over open ground, so it has no window.', by: [...blockers] });
     // terrace: roof cells with nothing above them
     const open = m.cells.filter(c => (above.get(K2(c[0], c[1])) ?? -1) === c[2]);
     sky.set(m.id, open);
@@ -205,12 +205,12 @@ export function evaluate(site, mods, rules = {}) {
     if (rules.terrace && open.length < rules.terrace) {
       const by = new Set();
       for (const c of m.cells) for (let z = c[2] + 1; z <= (above.get(K2(c[0], c[1])) ?? -1); z++) { const o = occ.get(K(c[0], c[1], z)); if (o && o !== m.id) by.add(o); }
-      fail(m.id, { rule: 'terrace', text: rules.terrace === 1 ? 'No roof open to the sky: no terrace.' : `${open.length} of ${rules.terrace} roof cells open to the sky.`, by: [...by] });
+      fail(m.id, { rule: 'terrace', text: rules.terrace === 1 ? 'Its whole roof is covered, so it has no garden.' : `Only ${open.length} of its roof cells are open to the sky, and it needs ${rules.terrace}.`, by: [...by] });
     }
     // access: a core beside it, or the street under it
     const reach = m.cells.some(c => (site.street !== false && c[2] === 0 && c[1] === 0) || DIR4.some(d => isCore(site, c[0] + d[0], c[1] + d[1])));
     access.set(m.id, reach);
-    if (rules.access && !reach) fail(m.id, { rule: 'access', text: 'No way in: it touches no core, and not the street.', by: [] });
+    if (rules.access && !reach) fail(m.id, { rule: 'access', text: 'There is no way in. It touches neither a stair core nor the street.', by: [] });
   }
   return { ok: fails.size === 0, fails, lit, sky, access, score: { terrace, daylight }, failing: [...fails.keys()] };
 }
@@ -220,10 +220,10 @@ export const RULE_NAMES = { support: 'Support', daylight: 'Daylight', terrace: '
 // the rules a level applies, as lines for the side card
 export function ruleLines(rules) {
   const out = [];
-  out.push({ rule: 'support', text: rules.support == null ? 'Rests on something' : rules.support ? `Overhang ${rules.support} at most` : 'No overhang' });
-  if (rules.daylight) out.push({ rule: 'daylight', text: rules.daylight === 'south' ? 'A south window' : 'A window to the open' });
-  if (rules.terrace) out.push({ rule: 'terrace', text: rules.terrace === 1 ? 'A roof open to the sky' : `${rules.terrace} roof cells open to the sky` });
-  if (rules.access) out.push({ rule: 'access', text: 'Touches a core or the street' });
+  out.push({ rule: 'support', text: rules.support == null ? 'Stands on something' : rules.support ? `Sticks out ${rules.support} at most` : 'No overhangs' });
+  if (rules.daylight) out.push({ rule: 'daylight', text: rules.daylight === 'south' ? 'A window facing south' : 'A window with a view' });
+  if (rules.terrace) out.push({ rule: 'terrace', text: rules.terrace === 1 ? 'Some open roof' : `${rules.terrace} cells of open roof` });
+  if (rules.access) out.push({ rule: 'access', text: 'Reached from a core or the street' });
   return out;
 }
 

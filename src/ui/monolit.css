@@ -137,6 +137,9 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .udp-title b { display: block; font-weight: 500; }
 .udp-sub { margin: 12px 0 0; max-width: 360px; font-size: 15px; line-height: 1.5; color: var(--grey1); }
 .udp-sub em { font-style: normal; color: var(--signal); }
+/* the count under the instruction: numbers stay out of the sentence */
+.udp-sub .udp-count { display: block; margin-top: 6px; font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--grey2); }
+.udp-sub .udp-count em { color: var(--signal); }
 .udp-sub b { font-weight: 500; color: var(--ink); }
 .udp-msg {
   margin: 10px 0 0; max-width: 360px; min-height: 0;

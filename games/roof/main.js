@@ -39,7 +39,8 @@ frame.stack(true);
 // small helpers
 // ------------------------------------------------------------------
 
-const TITLES = { which: 'Which plan?', error: 'Spot the error.', name: 'Name the lines.', draw: 'Roof to plan.', construct: 'Construct the plan.', brief: 'Design to brief.' };
+const touchScreen = matchMedia('(pointer: coarse)').matches;
+const TITLES = { which: 'Which plan is right?', error: 'Can you spot the mistakes?', name: 'What is each line?', draw: 'Can you draw its plan?', construct: 'Can you work out the plan?', brief: 'Can you design to the brief?' };
 const TASK_TAGS = { which: 'which plan', error: 'spot the error', name: 'name the lines', draw: 'roof to plan', construct: 'construct', brief: 'design to brief' };
 const KIND_NAMES = { ridge: 'ridge', hip: 'hip', valley: 'valley' };
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -241,7 +242,7 @@ function whichTask(item, roof) {
     setOpt(i, 'none');
     o.lines.forEach((l, n) => board.update(`o${i}l${n}`, { style: l.wrong ? KIND_SIGNAL[l.kind] : 'guide' }));
     const w = o.why;
-    session.miss({ note: `${String.fromCharCode(65 + i)}: ${w.why}.`, culprits: [{ at: () => board.toClient(add2(mid(w.a, w.b), o.off)), r: 22 }] });
+    session.miss({ note: `Not plan ${String.fromCharCode(65 + i)}. It has ${w.why}.`, culprits: [{ at: () => board.toClient(add2(mid(w.a, w.b), o.off)), r: 22 }] });
   }
 
   const offTap = onBoardTap(board, ev => { const h = board.hit(ev, { kinds: ['poly'], filter: it => it.opt !== undefined }); if (h) choose(h.item.opt); });
@@ -256,7 +257,7 @@ function whichTask(item, roof) {
   board.el.addEventListener('pointermove', move);
 
   frame.title(TITLES.which, item.name);
-  frame.sub('The roof is in front of you. Only one of the three plans draws it right: every hip, valley and ridge in the right place and the right type. Click it.');
+  frame.sub('Only one of these three plans shows this roof correctly, with every hip, valley and ridge in the right place. Tap the one you think it is.');
   frame.tools([
     { id: 'hint', label: 'Hint', key: 'H', run: () => session.hint() },
     ...opts.map((_, i) => ({ id: 'c' + i, label: String.fromCharCode(65 + i), key: String.fromCharCode(65 + i), hidden: true, run: () => choose(i) })),
@@ -269,14 +270,14 @@ function whichTask(item, roof) {
     choose,
     check: () => ({ ok: chosen >= 0 }),
     hint(n) {
-      if (n === 1) return { text: 'Look at the outside corners first: a hip runs from each one at 45 degrees. Inside corners send up valleys.' };
+      if (n === 1) return { text: 'Start with the outside corners. A hip runs up from each one at 45 degrees, and each inside corner sends up a valley.' };
       if (n === 2) {
         const o = opts.find(x => !x.ok && !x.out);
         if (o) { o.out = true; o.lines.forEach((l, k) => board.update(`o${opts.indexOf(o)}l${k}`, { style: 'guide' })); }
-        return { text: 'One wrong plan is out.' };
+        return { text: 'One of the wrong plans is crossed out for you.' };
       }
       const i = opts.findIndex(o => o.ok);
-      return { text: 'This one:', culprits: [{ at: () => board.toClient(add2(opts[i].off, [W / 2, H / 2])), r: 40 }] };
+      return { text: 'It is this one.', culprits: [{ at: () => board.toClient(add2(opts[i].off, [W / 2, H / 2])), r: 40 }] };
     },
     solved: () => finale(model),
     dispose() { offTap(); board.el.removeEventListener('pointermove', move); board.dispose(); closeCard(); model.dispose(); },
@@ -300,7 +301,7 @@ function errorTask(item, roof) {
   const found = new Set();
   const offHover = linkHover(board, model, { filter: it => it.line && !found.has(it.ref) });
 
-  function sub() { frame.sub(`A student drafted this roof plan, and it has <em>${plural(n, 'mistake')}</em>: a line of the wrong type, or one that runs too far or stops short. Compare it with the roof and tap the wrong lines. ${found.size} of ${n} found.`, true); }
+  function sub() { frame.sub(`A student drew this roof plan and made <em>${n === 1 ? 'one mistake' : `${n} mistakes`}</em>. A line may be the wrong kind, run too far or stop short. Compare it with the roof and tap what is wrong.<span class="udp-count"><em>${found.size}</em> / ${n} found</span>`, true); }
 
   const offTap = onBoardTap(board, ev => {
     const h = board.hit(ev, { kinds: ['seg'], filter: it => it.line, tol: 12 });
@@ -316,9 +317,9 @@ function errorTask(item, roof) {
       if (found.size >= n) session.check();
       return;
     }
-    const why = l.kind === 'hip' ? 'That hip is right: it runs from an outside corner at 45 degrees.'
-      : l.kind === 'valley' ? 'That valley is right: it rises from an inside corner.'
-      : 'That ridge is right: it is level, between the two slopes.';
+    const why = l.kind === 'hip' ? 'That hip is fine. It runs up from an outside corner at 45 degrees, as it should.'
+      : l.kind === 'valley' ? 'That valley is fine. It rises from an inside corner, as it should.'
+      : 'That ridge is fine. It is level and sits between the two slopes.';
     session.miss({ note: why, culprits: [{ at: () => board.toClient(mid(l.a, l.b)), r: 16 }] });
   });
 
@@ -335,9 +336,9 @@ function errorTask(item, roof) {
     hint(k) {
       const x = left()[0];
       if (!x) return null;
-      if (k === 1) return { text: 'Ridges are level and sit half way between two eaves; hips leave outside corners, valleys leave inside corners.' };
-      if (k === 2) return { text: 'Look around here:', culprits: [{ at: () => board.toClient(mid(x.l.a, x.l.b)), r: 46 }] };
-      return { text: x.l.why + ':', culprits: [{ at: () => board.toClient(mid(x.l.a, x.l.b)), r: 16 }] };
+      if (k === 1) return { text: 'A ridge is level and sits halfway between two eaves. Hips start at outside corners and valleys at inside corners.' };
+      if (k === 2) return { text: 'Have a look around here.', culprits: [{ at: () => board.toClient(mid(x.l.a, x.l.b)), r: 46 }] };
+      return { text: 'Here, ' + x.l.why + '.', culprits: [{ at: () => board.toClient(mid(x.l.a, x.l.b)), r: 16 }] };
     },
     solved: () => finale(model),
     dispose() { offTap(); offHover(); board.dispose(); closeCard(); model.dispose(); },
@@ -373,7 +374,7 @@ function nameTask(item, roof) {
   const cycle = i => set(i, ORDER[(ORDER.indexOf(named[i]) + 1) % 3]);
   function refresh() {
     const done = named.filter(Boolean).length;
-    frame.sub(`Tap a line to name it: ridge, hip, valley, and round again. Or point at it and press <em>1</em> ridge, <em>2</em> hip, <em>3</em> valley. ${done} of ${lines.length} named.${show ? '' : ' There is no model to look at: read it from the plan.'}`, true);
+    frame.sub(`Every line in this roof plan is a ridge, a hip or a valley. Tap a line to name it, and tap again to change your answer.${show ? '' : ' This time there is no model, so read it from the plan alone.'}${touchScreen ? '' : ' You can also point at a line and press 1, 2 or 3.'}<span class="udp-count"><em>${done}</em> / ${lines.length} named</span>`, true);
     frame.primary({ label: 'Check', run: () => session.check(), disabled: done < lines.length, ready: done === lines.length });
   }
 
@@ -397,13 +398,13 @@ function nameTask(item, roof) {
       if (!bad.length) return { ok: true };
       for (const i of bad) board.update('pl' + i, { style: 'signalThin' });
       setTimeout(() => bad.forEach(i => named[i] && board.update('pl' + i, { style: KIND_STYLE[named[i]] })), 1600);
-      return { ok: false, note: `${plural(bad.length, 'line')} named wrong.`, culprits: bad.slice(0, 3).map(i => ({ at: () => board.toClient(mid(lines[i].a, lines[i].b)), r: 16 })) };
+      return { ok: false, note: `${bad.length === 1 ? 'One line has' : `${bad.length} lines have`} the wrong name. They are circled.`, culprits: bad.slice(0, 3).map(i => ({ at: () => board.toClient(mid(lines[i].a, lines[i].b)), r: 16 })) };
     },
     hint(n) {
-      if (n === 1) return { text: 'A ridge is level. A hip climbs from an outside corner of the walls, a valley from an inside corner.' };
-      if (n === 2) { lines.forEach((l, i) => l.kind === 'ridge' && set(i, 'ridge')); return { text: 'The ridges are named for you.' }; }
+      if (n === 1) return { text: 'A ridge is level. A hip climbs from an outside corner of the walls, and a valley from an inside corner.' };
+      if (n === 2) { lines.forEach((l, i) => l.kind === 'ridge' && set(i, 'ridge')); return { text: 'The ridges are now named for you.' }; }
       lines.forEach((l, i) => set(i, l.kind));
-      return { text: 'Every line is named.' };
+      return { text: 'Every line is now named for you.' };
     },
     solved: () => finale(model),
     dispose() { offTap(); offHover(); board.dispose(); closeCard(); model.dispose(); },
@@ -431,8 +432,8 @@ function drawTask(item, roof, { construct = false } = {}) {
     if (!construct) model.overlay('drawn', lines.map(l => [l.a, l.b]), 'signalThin');
     const n = lines.length;
     frame.sub(construct
-      ? `Every eave is at one height and every roof plane has one slope. Draw the hips, valleys and ridges on the footprint: drag between points, tap a line to rub it out. The roof rises when the plan is right. ${plural(n, 'line')} drawn.`
-      : `Turn the roof round and draw its plan on the footprint: drag between points for each hip, valley and ridge, tap a line to rub it out. ${plural(n, 'line')} drawn.`);
+      ? `All the eaves are at one height and every roof slope is the same, so the footprint decides the whole roof. Drag between points to draw the hips, valleys and ridges; tap a line to remove it. When your plan is right, the roof rises.<span class="udp-count">${plural(n, 'line')} drawn</span>`
+      : `Look at the roof from a few sides, then draw its plan on the footprint. Drag between points to draw each hip, valley and ridge; tap a line to remove it.<span class="udp-count">${plural(n, 'line')} drawn</span>`, true);
     frame.primary({ label: 'Check', run: () => session.check(), disabled: !drawn.size, ready: false });
     frame.tool('undo', { off: !history.length });
     stage.invalidate();
@@ -493,23 +494,23 @@ function drawTask(item, roof, { construct = false } = {}) {
       for (const l of extra) board.line(l.a, l.b, 'signalThin', { id: 'x' + l.steps[0], hit: false });
       setTimeout(() => { for (const l of extra) board.remove('x' + l.steps[0]); }, 1800);
       const parts = [];
-      if (miss.length) parts.push(`${plural(miss.length, 'line')} still missing`);
-      if (extra.length) parts.push(`${plural(extra.length, 'line')} the roof does not have`);
+      if (miss.length) parts.push(`${miss.length === 1 ? 'one line is' : `${miss.length} lines are`} still missing`);
+      if (extra.length) parts.push(`${extra.length === 1 ? 'one line isn’t' : `${extra.length} lines aren’t`} on this roof`);
       const culprits = [...extra.slice(0, 2).map(l => ({ at: () => board.toClient(mid(l.a, l.b)), r: 16, note: 'not on this roof' })),
         ...(extra.length ? [] : miss.slice(0, 1).map(l => ({ at: () => board.toClient(mid(l.a, l.b)), r: 26, note: 'missing here' })))];
-      return { ok: false, note: parts.join(', ') + '.', culprits };
+      return { ok: false, note: 'Not quite: ' + parts.join(', and ') + '.', culprits };
     },
     hint(n) {
-      if (n === 1) return { text: 'Start at the corners: from every outside corner a hip at 45 degrees, from every inside corner a valley. Where two of them meet, a ridge runs on, level.' };
+      if (n === 1) return { text: 'Start at the corners. Draw a hip at 45 degrees from every outside corner and a valley from every inside corner. Where two of them meet, a level ridge carries on.' };
       const all = planLines(roof);
       if (guides) for (let i = 0; i < guides.length; i++) board.remove('g' + i);
       if (n === 2) {
         const cs = new Set([...roof.corners.convex, ...roof.corners.reflex].map(p => p.join()));
         showGuides(all.filter(l => cs.has(l.a.join()) || cs.has(l.b.join())));
-        return { text: 'The lines from the corners are dashed in for you.' };
+        return { text: 'The lines from the corners are now dashed in for you.' };
       }
       showGuides(all);
-      return { text: 'The whole plan is dashed in. Trace it.' };
+      return { text: 'The whole plan is dashed in now. Trace over it.' };
     },
     async solved() {
       board.items().filter(it => String(it.id).startsWith('d') || String(it.id).startsWith('g')).forEach(it => board.remove(it.id));
@@ -565,13 +566,13 @@ function editorTask(item, { workshop = false } = {}) {
     if (workshop) {
       const s = stats;
       frame.sub(s ? `${plural(s.modules, 'module')} · ${plural(s.valleys, 'valley')} · ${plural(s.hips, 'hip')} · ${s.ridges === 1 ? 'one ridge' : plural(s.ridges, 'ridge')} · ridge ${s.height} ${s.height === 1 ? 'module' : 'modules'} up${s.courtyards ? ' · a courtyard' : ''}`
-        : cells.size ? 'That footprint cannot carry one roof: every block must touch the next along a whole side.' : 'Paint a footprint on the site: drag over the cells. The roof grows over it as you go.');
+        : cells.size ? 'This footprint can’t carry a single roof. Each block has to touch the next one along a whole side.' : 'Drag over the site to paint a footprint. The roof grows over it as you go.');
       return;
     }
     const m = meets(cells, item.brief);
     const list = m.map(x => `<span class="rf-brief${x.ok ? ' is-ok' : ''}"><i>${x.ok ? '◆' : '◇'}</i>${x.text}</span>`).join(' ');
     const all = m.every(x => x.ok);
-    frame.sub(`Paint a footprint on the site whose roof has ${list}${cells.size && !valid ? '<br><em>Every block must touch the next along a whole side.</em>' : ''}`, true);
+    frame.sub(`Drag over the site to paint a footprint. The brief asks for a roof with ${list}${cells.size && !valid ? '<br><em>Each block has to touch the next one along a whole side.</em>' : ''}`, true);
     frame.primary({ label: 'Submit', run: () => session.check(), disabled: !cells.size, ready: all });
   }
 
@@ -595,11 +596,11 @@ function editorTask(item, { workshop = false } = {}) {
   function setPitch(p) {
     pitch = Math.max(.25, Math.min(1.6, p));
     if (model && valid) { model.setPitch(pitch); model.setK(pitch); }
-    frame.say(`Pitch ${Math.round(Math.atan(pitch) * 180 / Math.PI)}°. The plan does not change.`, { ms: 1800 });
+    frame.say(`The roof is now pitched at ${Math.round(Math.atan(pitch) * 180 / Math.PI)}°, and the plan stays exactly the same.`, { ms: 2200 });
     stage.invalidate();
   }
 
-  frame.title(workshop ? 'Workshop.' : TITLES.brief, workshop ? 'Free roofs' : item.name);
+  frame.title(workshop ? 'Free roofs' : TITLES.brief, workshop ? 'Any footprint' : item.name);
   frame.tools([
     { id: 'clear', label: 'Clear', key: 'C', run: () => { cells = new Set(); for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) board.update('site' + key(i, j), { fill: 'none' }); sfx.slide(); rebuild(); } },
     { id: 'flat', label: 'Flatter', key: '[', run: () => setPitch(pitch - .15) },
@@ -633,20 +634,20 @@ function editorTask(item, { workshop = false } = {}) {
     paint: list => { cells = new Set(list); for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) board.update('site' + key(i, j), { fill: cells.has(key(i, j)) ? 'face' : 'none' }); rebuild(); },
     _answer: () => { const c = example(); return c && [...c]; },
     check() {
-      if (!cells.size) return { ok: false, strike: false, note: 'Paint a footprint first.' };
-      if (!valid) return { ok: false, note: 'Two blocks touch only at a corner, or the footprint is in pieces. One building, please.' };
+      if (!cells.size) return { ok: false, strike: false, note: 'Paint a footprint first, then submit it.' };
+      if (!valid) return { ok: false, note: 'Some blocks only touch at a corner, or the footprint is in pieces. It needs to be one building.' };
       const m = meets(cells, item.brief).filter(x => !x.ok);
       if (!m.length) return { ok: true };
       const s = stats;
-      return { ok: false, note: `Not yet: it should have ${m.map(x => x.text).join(' and ')}. It has ${plural(s.valleys, 'valley')}, ${s.ridges === 1 ? 'one ridge' : plural(s.ridges, 'ridge')}, ${plural(s.modules, 'module')}.` };
+      return { ok: false, note: `Close, but the brief asks for ${m.map(x => x.text).join(' and ')}. Yours has ${plural(s.valleys, 'valley')}, ${s.ridges === 1 ? 'one ridge' : plural(s.ridges, 'ridge')} and ${plural(s.modules, 'module')}.` };
     },
     hint(n) {
-      if (n === 1) return { text: 'Every inside corner of the walls sends up one valley. An L has one, a T two, a U two, an H four.' };
-      if (n === 2) return { text: item.brief.courtyard ? 'A courtyard needs a ring of rooms all the way round an open middle.' : 'Start from a long bar, then add wings: each wing brings two inside corners if it sits in the middle of a side, one if it sits at the end.' };
+      if (n === 1) return { text: 'Each inside corner of the walls sends up one valley. An L shape has one, a T or a U has two, and an H has four.' };
+      if (n === 2) return { text: item.brief.courtyard ? 'A courtyard needs a ring of rooms all the way round an open middle.' : 'Start from a long bar and add wings. A wing in the middle of a side adds two inside corners, and a wing at the end adds one.' };
       const c = example();
-      if (!c) return { text: 'Try a U or an H.' };
+      if (!c) return { text: 'Try a U shape or an H shape.' };
       for (const k of c) board.update('site' + k, { fill: cells.has(k) ? 'face' : 'signal' });
-      return { text: 'One footprint that meets the brief is marked on the site.' };
+      return { text: 'One footprint that meets the brief is now marked on the site.' };
     },
     solved: () => finale(model),
     dispose() { offPaint(); rain?.dispose(); board.dispose(); closeCard(); model?.dispose(); site.dispose(); },
@@ -730,8 +731,8 @@ function generate(rng, difficulty) {
 
 const def = {
   id: 'roof', prefix: 'R', name: 'Roof Plans',
-  lead: 'Roofs and their plans.',
-  sub: 'One eave height, one pitch, any footprint: read the hips, valleys and ridges, draw the plan, and design a roof to a brief.',
+  lead: 'How a footprint becomes a roof.',
+  sub: 'With every eave at one height and every slope the same, the footprint decides the roof. Learn to read hips, valleys and ridges, draw roof plans and design to a brief.',
   packs,
   load,
   check: () => task.check(),

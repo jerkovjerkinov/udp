@@ -41,7 +41,7 @@ if (stage.ground) stage.ground.receiveShadow = false;
 // helpers
 // ------------------------------------------------------------------
 
-const TITLES = { read: 'What opens?', draw: 'Draw the card.', tear: 'Will it stand?', plans: 'From drawings.' };
+const TITLES = { read: 'What will open?', draw: 'Can you make the card?', tear: 'Will it stand up?', plans: 'Can you make it from the drawings?' };
 const TASK_TAGS = { read: 'read', draw: 'draw', tear: 'will it stand', plans: 'from drawings' };
 const plural = (n, w) => `${n} ${n === 1 ? w : w + 's'}`;
 const LETTER = i => String.fromCharCode(65 + i);
@@ -91,14 +91,14 @@ function differences(got, want) {
 function diffNote(got, want, i) {
   const p = profileOf(got.cols[i]), q = profileOf(want.cols[i]);
   const c = `Column ${i + 1}`;
-  if (!p.ok) return `${c} cannot stand: ${p.why}.`;
-  if (p.plain) return `${c} is flat, but the building stands there.`;
-  if (q.plain) return `${c} stands, but the building has nothing there.`;
+  if (!p.ok) return `${c} can’t stand up, because ${p.why}.`;
+  if (p.plain) return `${c} stays flat, but the building stands up there.`;
+  if (q.plain) return `${c} stands up, but the building has nothing there.`;
   const steps = x => x.pieces.length / 2;
-  if (steps(p) !== steps(q)) return `${c} has ${plural(steps(p), 'step')}; the building has ${steps(q)} there.`;
-  if (p.a !== q.a) return `${c} leaves the floor ${-p.a} out; the building is ${-q.a} deep there.`;
-  if (p.b !== q.b) return `${c} meets the wall at ${p.b}; the building is ${q.b} high there.`;
-  return `${c} has the right depth and height, but its step is in another place.`;
+  if (steps(p) !== steps(q)) return `${c} has ${plural(steps(p), 'step')}, but the building has ${steps(q)} there.`;
+  if (p.a !== q.a) return `${c} comes ${-p.a} out from the fold, but the building is ${-q.a} deep there.`;
+  if (p.b !== q.b) return `${c} meets the wall at ${p.b}, but the building is ${q.b} high there.`;
+  return `${c} has the right depth and height, but its step is in a different place.`;
 }
 
 // a column, in words, for the readout under the board
@@ -327,7 +327,7 @@ function readTask(item, card, rng) {
     if (o.ok) { chosen = i; board.update('opt' + i, { fill: 'signal' }); session.check(); return; }
     o.out = true;
     board.update('opt' + i, { fill: 'rgba(15, 15, 14, .6)' });
-    session.miss({ note: `${LETTER(i)}: ${o.why}.`, culprits: [{ at: () => board.toClient([o.off[0] + card.W / 2, o.off[1]]), r: 34 }] });
+    session.miss({ note: `Not card ${LETTER(i)}: ${o.why}.`, culprits: [{ at: () => board.toClient([o.off[0] + card.W / 2, o.off[1]]), r: 34 }] });
   }
   const offTap = onBoardTap(board, ev => { const h = board.hit(ev, { kinds: ['poly'], filter: it => it.opt !== undefined }); if (h) choose(h.item.opt); });
   // pointing at a card lights it; pointing at a column lights that section on the building
@@ -348,7 +348,7 @@ function readTask(item, card, rng) {
   board.el.addEventListener('pointerleave', leave);
 
   frame.title(TITLES.read, item.name);
-  frame.sub('Which card opens into this building? Point at a column to light its section. Click a card, or press A to D.');
+  frame.sub('Which of these cards opens into this building? Each column of a card is one section through it. Tap a card, or press A to D.');
   frame.tools([
     { id: 'hint', label: 'Hint', key: 'H', run: () => session.hint() },
     ...options.map((_, i) => ({ id: 'c' + i, label: LETTER(i), key: LETTER(i), hidden: true, run: () => choose(i) })),
@@ -360,14 +360,14 @@ function readTask(item, card, rng) {
     _answer: () => options.findIndex(o => o.ok),
     check: () => ({ ok: chosen >= 0 }),
     hint(k) {
-      if (k === 1) return { text: 'Read a card column by column. The first fold below the gutter is how far the strip stands out of the floor; the last fold above it is the height where it meets the wall.' };
+      if (k === 1) return { text: 'Read a card one column at a time. The first fold below the middle crease says how far the strip comes out from the wall, and the last fold above it says how high it reaches.' };
       if (k === 2) {
         const o = options.find(x => !x.ok && !x.out);
         if (o) { o.out = true; board.update('opt' + options.indexOf(o), { fill: 'rgba(15, 15, 14, .6)' }); }
-        return { text: 'One wrong card is out.' };
+        return { text: 'One of the wrong cards is crossed out for you.' };
       }
       const i = options.findIndex(o => o.ok);
-      return { text: 'This one:', culprits: [{ at: () => board.toClient([options[i].off[0] + card.W / 2, options[i].off[1]]), r: 40 }] };
+      return { text: 'It is this one.', culprits: [{ at: () => board.toClient([options[i].off[0] + card.W / 2, options[i].off[1]]), r: 40 }] };
     },
     solved: () => finale(view),
     dispose() { offTap(); board.el.removeEventListener('pointermove', move); board.el.removeEventListener('pointerleave', leave); board.dispose(); closeCard(); view.dispose(); },
@@ -405,11 +405,11 @@ function drawTask(item, want) {
   function refresh() {
     const c = ed.card;
     const n = stripsOf(c).length, bad = stripsOf(c).filter(st => !profileOf(st.folds).ok).length;
-    const how = 'Tap a row to fold a column there; drag along a row for several.';
-    const count = n ? ` <em>${plural(n, 'strip')}</em>${bad ? `, ${bad} cannot stand` : ''}.` : '';
+    const how = 'Tap a row to fold a column there, or drag along a row to fold several.';
+    const count = n ? `<span class="udp-count"><em>${n}</em> ${n === 1 ? 'strip' : 'strips'}${bad ? ` · ${bad} can’t stand` : ''}</span>` : '';
     frame.sub(fromDrawings
-      ? `Fold the card that makes this plan and elevation. ${how}${count}`
-      : `Fold the blank card so it opens into this building. ${how}${count}`, true);
+      ? `Fold a card that makes this plan and this front view. ${how}${count}`
+      : `Fold the blank card so that it opens into this building. ${how}${count}`, true);
     frame.primary({ label: 'Open', run: () => session.check(), disabled: ed.empty || busy, ready: !bad && n > 0 });
   }
 
@@ -439,10 +439,10 @@ function drawTask(item, want) {
     },
     hint(k) {
       if (k === 1) return { text: fromDrawings
-        ? 'The plan shows where each roof starts and ends; the elevation how high each one is. In a strip the front roof is the lowest. A box d deep and h high folds at −d, h − d and h.'
-        : 'Every column is a section of the building. A box d deep and h high folds at −d, h − d and h, and is cut from −d to h. Each step back adds a wall piece and a roof.' };
+        ? 'The plan shows where each roof starts and ends, and the front view shows how high each one is. In a strip, the front roof is always the lowest. A box d deep and h high folds at −d, h − d and h.'
+        : 'Every column is a section through the building. A box d deep and h high folds at −d, h − d and h, and is cut from −d to h. Each step back adds a wall piece and a roof.' };
       const i = wrongCol();
-      if (i === undefined) return { text: 'Every column is right. Open it.' };
+      if (i === undefined) return { text: 'Every column is right, so go ahead and open it.' };
       if (k === 2) {
         view.markColumn([i]);
         return { text: diffNote(ed.card, want, i), culprits: [{ at: () => board.toClient([i + .5, 0]), r: 18 }] };
@@ -450,7 +450,7 @@ function drawTask(item, want) {
       const f = want.cols[i];
       if (f) foldTypes(f).forEach((t, n) => board.line([i, f[n]], [i + 1, f[n]], 'signalFold', { id: 'hf' + i + '_' + n, hit: false }));
       else board.polygon(rect(i, i + 1, -want.D, want.H), { fill: 'signal', stroke: null, id: 'hf' + i, hit: false });
-      return { text: f ? `Column ${i + 1} folds at ${[...f].sort((a, b) => a - b).map(v => String(v).replace('-', '−')).join(', ')}: dashed in.` : `Column ${i + 1} stays flat.` };
+      return { text: f ? `Column ${i + 1} folds at ${[...f].sort((a, b) => a - b).map(v => String(v).replace('-', '−')).join(', ')}. The folds are dashed in for you.` : `Column ${i + 1} stays flat.` };
     },
     solved() { ed.lock(true); frame.primary({ label: 'Open', disabled: true }); return finale(view); },
     dispose() { ed.dispose(); board.dispose(); closeCard(); view.dispose(); },
@@ -481,7 +481,7 @@ function tearTask(item, card, rng) {
   let hoverN = -1, busy = false;
 
   function refresh() {
-    frame.sub(`A strip stands if its walls add up to where it meets the wall, and its roofs to how far out it leaves the floor. Mark the strips that tear. <em>${plural(marked.size, 'strip')}</em> marked.`, true);
+    frame.sub(`A strip stands up when its walls add up to the height where it meets the wall, and its roofs add up to how far it comes out. Tap the strips that would tear.<span class="udp-count"><em>${marked.size}</em> marked</span>`, true);
     frame.primary({ label: 'Open', run: () => session.check(), disabled: busy, ready: marked.size > 0 });
   }
   const markedCols = () => [...marked].flatMap(k => Array.from({ length: strips[k].x1 - strips[k].x0 }, (_, j) => strips[k].x0 + j));
@@ -538,18 +538,18 @@ function tearTask(item, card, rng) {
       if (!extra.length && !missing.length) return { ok: true };
       openAndBack();
       const parts = [];
-      if (missing.length) parts.push(`${plural(missing.length, 'strip')} that ${missing.length === 1 ? 'tears is' : 'tear are'} not marked`);
-      if (extra.length) parts.push(`${plural(extra.length, 'marked strip')} ${extra.length === 1 ? 'stands' : 'stand'} up fine`);
+      if (missing.length) parts.push(`${missing.length === 1 ? 'one strip that tears isn’t' : `${missing.length} strips that tear aren’t`} marked`);
+      if (extra.length) parts.push(`${extra.length === 1 ? 'one strip you marked stands' : `${extra.length} strips you marked stand`} up fine`);
       const at = n => () => board.toClient([(strips[n].x0 + strips[n].x1) / 2, 0]);
-      return { ok: false, note: parts.join('; ') + '.', culprits: extra.slice(0, 3).map(n => ({ at: at(n), r: 22 })) };
+      return { ok: false, note: 'Not quite: ' + parts.join(', and ') + '.', culprits: extra.slice(0, 3).map(n => ({ at: at(n), r: 22 })) };
     },
     hint(k) {
-      if (k === 1) return { text: 'Add up each strip from its first fold. Pieces alternate: wall, roof, wall, roof. The walls must reach the last fold, the roofs the distance of the first fold below the gutter.' };
+      if (k === 1) return { text: 'Add up each strip from its first fold. The pieces take turns: wall, roof, wall, roof. The walls have to reach the last fold, and the roofs have to match how far the first fold sits below the middle crease.' };
       const left = brokenN().filter(n => !marked.has(n));
       const n = left[0] ?? brokenN()[0];
-      if (n === undefined) return { text: 'Every strip stands.' };
+      if (n === undefined) return { text: 'Every strip stands up.' };
       const why = profileOf(strips[n].folds).why;
-      return { text: k === 2 ? 'This strip tears.' : `This strip tears: ${why}.`, culprits: [{ at: () => board.toClient([(strips[n].x0 + strips[n].x1) / 2, 0]), r: 22 }] };
+      return { text: k === 2 ? 'This strip tears.' : `This strip tears, because ${why}.`, culprits: [{ at: () => board.toClient([(strips[n].x0 + strips[n].x1) / 2, 0]), r: 22 }] };
     },
     async solved() {
       busy = true;
@@ -582,7 +582,7 @@ function workshopTask() {
   board.fit();
   function refresh() {
     const c = ed.card, bad = stripsOf(c).filter(st => !profileOf(st.folds).ok).length;
-    frame.sub(`Design any card. Tap a row to fold a column there; drag along a row for several. <em>${plural(stripsOf(c).length, 'strip')}</em>${bad ? `, ${bad} cannot stand` : ''}.`, true);
+    frame.sub(`Design any card you like. Tap a row to fold a column there, or drag along a row to fold several.<span class="udp-count"><em>${stripsOf(c).length}</em> ${stripsOf(c).length === 1 ? 'strip' : 'strips'}${bad ? ` · ${bad} can’t stand` : ''}</span>`, true);
     frame.primary({ label: theta === OPEN ? 'Close' : 'Open', run: toggleOpen, disabled: busy });
   }
   async function toggleOpen() {
@@ -601,13 +601,13 @@ function workshopTask() {
     a.download = 'origamic-card.svg';
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    frame.say('Card exported: cut solid, valley dashed, mountain dash-dot. 10 mm grid.', { ms: 2600 });
+    frame.say('Your card is saved as an SVG. Cuts are solid lines, valley folds dashed, mountain folds dash-dot, on a 10 mm grid.', { ms: 3000 });
   }
   function random() {
     ed.set(randomCard(seededRng('ws:' + Date.now()), { W: 12, D: 6, H: 7, strips: [3, 5], width: [1, 2], steps: [1, 3] }));
     sfx.flap();
   }
-  frame.title('Workshop.', 'Free card');
+  frame.title('Free design', 'Any card');
   frame.tools([
     { id: 'undo', label: 'Undo', key: 'Z', keys: ['Ctrl+Z'], run: () => ed.undo() },
     { id: 'clear', label: 'Clear', key: 'C', run: () => ed.clear() },
@@ -676,8 +676,8 @@ function generate(rng, d) {
 
 const def = {
   id: 'origamic', prefix: 'O', name: 'Origamic',
-  lead: 'Cut, fold, open.',
-  sub: 'One sheet, cuts and folds: open the card to 90 degrees and a building stands up. Every column is a section.',
+  lead: 'Cut it, fold it, open it.',
+  sub: 'Cut and fold a single sheet so that a building stands up when the card opens to 90 degrees. Every column of the card is a section through it.',
   packs,
   load,
   check: () => task.check(),
