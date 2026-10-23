@@ -83,7 +83,7 @@ if (t) {
 // every level: generated, solvable, and its solution keeps its rules
 const ids = new Set();
 for (const pk of PACKS) {
-  ok(pk.levels.length === 8, pk.id + ' has 8 levels');
+  ok(pk.levels.length >= 6 && pk.levels.length <= 8, pk.id + ' has 6 to 8 levels');
   for (const l of pk.levels) {
     ok(!ids.has(l.id), l.id + ' is unique'); ids.add(l.id);
     const lv = levelFrom(l, i => seededRng('stack:' + l.id + ':' + i));

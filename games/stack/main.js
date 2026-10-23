@@ -51,7 +51,7 @@ function parOf(spec) {
   const per = { fill: 14, habitat: 9 + rules * 4, match: 16 + rules * 3, fix: 7 + rules * 3, optimise: 18 + rules * 4 }[spec.task];
   return Math.round((20 + n * per) / 5) * 5;
 }
-const packs = PACKS.map(pk => ({ ...pk, levels: pk.levels.map(l => ({ ...l, label: `${l.name} · ${TASK_TAGS[l.task]}`, par: parOf(l) })) }));
+const packs = PACKS.map(pk => ({ ...pk, levels: pk.levels.map(l => ({ ...l, label: `${l.name} · ${TASK_TAGS[l.task]}`, par: parOf(l), note: l.learn })) }));
 
 // ------------------------------------------------------------------
 // the tray, the rules and the drawings: the side card
