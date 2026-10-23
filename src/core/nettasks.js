@@ -110,7 +110,8 @@ function pieceOf(solid, cuts) {
 
 // Pick cut edges to ask about: their two sides lie apart on the net (not
 // touching), and the further apart the better. Returns [{ e, given: side, answer: side }].
-export function matchEdges(net, rng, n = 3) {
+// far: only the edges whose two sides lie furthest apart (several faces carried round)
+export function matchEdges(net, rng, n = 3, { far: onlyFar = false } = {}) {
   const far = net.rim.filter(r => !net.kisses.includes(r.e)).map(r => {
     const [s0, s1] = r.sides;
     const m = s => [(s.a[0] + s.b[0]) / 2, (s.a[1] + s.b[1]) / 2];
@@ -118,7 +119,7 @@ export function matchEdges(net, rng, n = 3) {
     return { r, d: Math.hypot(a[0] - b[0], a[1] - b[1]) };
   }).sort((x, y) => y.d - x.d);
   // the far ones first, but not always the same three
-  const pool = shuffle(rng, far.slice(0, Math.max(n + 2, Math.ceil(far.length * .6))));
+  const pool = onlyFar ? far.slice(0, n) : shuffle(rng, far.slice(0, Math.max(n + 2, Math.ceil(far.length * .6))));
   return pool.slice(0, n).map(({ r }) => {
     const k = randInt(rng, 2);
     return { e: r.e, given: { e: r.e, f: r.sides[k].f }, answer: { e: r.e, f: r.sides[1 - k].f } };

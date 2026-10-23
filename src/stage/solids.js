@@ -30,6 +30,7 @@ export const FACE_STATES = {
   normal:   { tint: 0, glow: 0 },
   hover:    { tint: .1, glow: .045 },
   selected: { tint: .28, glow: .08 },
+  marked:   { tint: .16, glow: .05 },
   error:    { tint: .62, glow: .2 },
   ghost:    { tint: 0, glow: 0, opacity: .2 },
 };

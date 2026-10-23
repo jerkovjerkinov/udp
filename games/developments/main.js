@@ -25,6 +25,7 @@ import { sfx } from '../../src/fx/sfx.js';
 import { FORMS, formsOfPack } from '../../src/core/forms.js';
 import { unfold, mapSolid, randomUnfolding } from '../../src/core/poly.js';
 import { opening, matchEdges, misfit, misfitPose, distractors, baseFace, sheetFit, tableNet } from '../../src/core/nettasks.js';
+import { keptFaces, keptWhole, lineStep, lineEnds, verdict, solutions, drawRounds, mended } from '../../src/core/netrules.js';
 import { seededRng, pick, randInt, shuffle } from '../../src/core/rand.js';
 import { PACKS } from './levels.js';
 
@@ -38,8 +39,11 @@ const picker = createPicker(stage);
 // small helpers
 // ------------------------------------------------------------------
 
-const TITLES = { cut: 'Can you open it flat?', match: 'Where does it glue?', which: 'Which solid is it?', fold: 'Will it fold?' };
-const TASK_TAGS = { cut: 'cut open', match: 'match edges', which: 'which solid', fold: 'will it fold' };
+const TITLES = { cut: 'Can you open it flat?', match: 'Where does it glue?', which: 'Which solid is it?', fold: 'Will it fold?', draw: 'Where does it go on the sheet?', fix: 'Can you mend the net?' };
+const TASK_TAGS = { cut: 'cut open', match: 'match edges', which: 'which solid', fold: 'will it fold', draw: 'draw on the net', fix: 'mend the net' };
+// a cut level's title follows the rule that makes it hard
+const cutTitle = it => it.line ? 'Can you open it in one cut?' : it.keep === 'walls' ? 'Can you keep the walls together?' : it.keep === 'roof' ? 'Can you keep the roof in one piece?' : it.paper ? 'Will it fit on the sheet?' : TITLES.cut;
+const ruleTag = it => it.line ? ' · one cut' : it.keep ? ` · ${it.keep} whole` : it.paper ? ' · sheet' : '';
 const lerp3 = (a, b, v) => [a[0] + (b[0] - a[0]) * v, a[1] + (b[1] - a[1]) * v, a[2] + (b[2] - a[2]) * v];
 const close = (A, B) => A.every((p, i) => Math.abs(p[0] - B[i][0]) + Math.abs(p[1] - B[i][1]) + Math.abs(p[2] - B[i][2]) < 1e-4);
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -75,7 +79,7 @@ function play(view, pose, t0, t1, { duration = 900, easing = ease.cubicInOut } =
 // the par time in seconds: a little over what a careful first attempt takes
 function parOf(task, solid) {
   const F = solid.faces.length, need = solid.edges.length - F + 1;
-  const p = task === 'cut' ? 20 + need * 5 : task === 'match' ? 30 + F * 3 : task === 'which' ? 25 + F * 2 : 45 + F * 2;
+  const p = task === 'cut' ? 20 + need * 5 : task === 'match' ? 30 + F * 3 : task === 'which' ? 25 + F * 2 : task === 'draw' ? 30 + F * 3 : task === 'fix' ? 25 + F * 2 : 45 + F * 2;
   return Math.round(p / 5) * 5;
 }
 
@@ -85,8 +89,8 @@ function parOf(task, solid) {
 
 const packs = PACKS.map(pk => ({
   ...pk,
-  levels: pk.levels.map(l => ({ ...l, name: FORMS[l.form].name, label: `${FORMS[l.form].name} · ${TASK_TAGS[l.task]}`,
-    note: FORMS[l.form].note, par: parOf(l.task, FORMS[l.form].make()) })),
+  levels: pk.levels.map(l => ({ ...l, name: FORMS[l.form].name, label: `${FORMS[l.form].name} · ${TASK_TAGS[l.task]}${l.task === 'cut' ? ruleTag(l) : ''}`,
+    note: l.learn || FORMS[l.form].note, par: parOf(l.task, FORMS[l.form].make()) + (l.line || l.keep ? 20 : 0) })),
 }));
 
 // ------------------------------------------------------------------
@@ -99,6 +103,8 @@ function cutTask(item, solid, { workshop = false } = {}) {
   const F = solid.faces.length, need = solid.edges.length - F + 1;
   const folded = solid.faces.map(f => f.loop.map(i => solid.verts[i]));
   const paper = item.paper || null;
+  const rules = { paper, line: !!item.line, keep: item.keep || null };
+  const kept = keptFaces(solid, rules.keep);
   let cuts = [], st = opening(solid, [], base), shownT = 1;
   let plan = null, marked = null, motion = null, busy = false, laidFlat = false;
 
@@ -106,6 +112,7 @@ function cutTask(item, solid, { workshop = false } = {}) {
 
   function styles() {
     view.setEdgeStyles(solid.edges.map(e => cuts.includes(e.id) ? 'signal' : marked?.has(e.id) ? 'signalFold' : e.flat ? 'guide' : 'visible'));
+    for (const f of kept) view.setFaceState(f, 'marked');
     stage.invalidate();
   }
 
@@ -139,11 +146,22 @@ function cutTask(item, solid, { workshop = false } = {}) {
       frame.primary({ label: laidFlat ? 'Fold up' : 'Unfold', run: toggleFlat, disabled: !flat, ready: flat });
     } else {
       const left = Math.max(0, need - cuts.length);
-      frame.sub(`${cuts.length ? 'Keep cutting until the form can open out flat, still in one piece.' : 'Tap an edge to cut along it. With enough cuts, the form opens out flat in one piece.'}${paper ? ` The flat net also has to fit on a ${paper[0]} × ${paper[1]} sheet.` : ''}<span class="udp-count"><em>${cuts.length}</em> / ${need} cuts${left ? '' : ' · ready to unfold'}</span>`, true);
+      frame.sub(`${cutSay()}<span class="udp-count"><em>${cuts.length}</em> / ${need} cuts${left ? '' : ' · ready to unfold'}</span>`, true);
       frame.primary({ label: 'Unfold', run: () => session.check(), disabled: !flat, ready: flat });
     }
     frame.tool('undo', { off: !cuts.length });
     drawCard();
+  }
+
+  // what the sub says: the goal and the level's one rule, the action only at the start
+  function cutSay() {
+    if (item.say) return item.say;
+    const rule = rules.line ? 'This time the scissors never leave the paper: every cut carries on from an end of the last one.'
+      : rules.keep === 'walls' ? 'The walls are shaded. Keep them joined to each other, so they unroll as one strip, like an elevation drawing.'
+      : rules.keep === 'roof' ? 'The roof is shaded. Keep its faces joined, so the roof comes out of the sheet in one piece.'
+      : paper ? `Open it out flat so that the net fits on a ${paper[0]} × ${paper[1]} sheet. The card on the side shows the sheet.` : '';
+    if (rule) return rule;
+    return cuts.length ? 'Keep cutting until the form opens out flat, still in one piece.' : 'Tap an edge to cut along it. With enough cuts, the form opens out flat in one piece.';
   }
 
   function setCuts(next) {
@@ -171,8 +189,31 @@ function cutTask(item, solid, { workshop = false } = {}) {
   function toggle(eid) {
     if (busy) return;
     red.clear();
-    if (cuts.includes(eid)) { setCuts(cuts.filter(e => e !== eid)); sfx.tick(); return; }
+    if (cuts.includes(eid)) {
+      if (rules.line && !lineEnds(solid, cuts).includes(eid)) {
+        view.setEdgeStyle(eid, 'signalFold');
+        session.miss({ note: 'That cut is in the middle of your line. You can take back a cut only from one of its two ends.', strike: false, label: 'Not that one' });
+        setTimeout(styles, 700);
+        return;
+      }
+      setCuts(cuts.filter(e => e !== eid)); sfx.tick(); return;
+    }
     const next = [...cuts, eid];
+    const why = rules.line ? lineStep(solid, cuts, eid) : null;
+    if (why) {
+      view.setEdgeStyle(eid, 'signalFold');
+      setTimeout(styles, 700);
+      session.miss({ note: why === 'branch' ? 'That would start a second line from the middle of the first. Carry on from one of the two ends instead.'
+        : why === 'jump' ? 'The scissors can’t jump there. Your next cut has to start where the line ends.'
+        : 'That would close the line into a loop and cut a piece right out.', strike: true, label: 'Not that one' });
+      return;
+    }
+    if (kept.length && !keptWhole(solid, kept, next)) {
+      view.setEdgeStyle(eid, 'signalFold');
+      view.flashFaces(kept, { times: 1, period: 420 }).then(() => styles());
+      session.miss({ note: rules.keep === 'walls' ? 'That edge holds the walls together. With it cut, the elevation would come apart in two strips.' : 'That edge holds the roof together. With it cut, the roof would come out in two pieces.', strike: true, label: 'Not that one' });
+      return;
+    }
     const o = opening(solid, next, base);
     if (o.state === 'apart') {
       // refused: the piece that would come away flashes
@@ -187,35 +228,20 @@ function cutTask(item, solid, { workshop = false } = {}) {
     setCuts(next);
   }
 
-  // a good net that keeps the hinges still uncut, for hints: random spanning trees of the uncut edges
+  // a good net that keeps every rule and the cuts made so far, for hints
   function findPlan() {
     if (plan && cuts.every(c => plan.cuts.includes(c))) return plan;
     const rng = seededRng('plan:' + cuts.join(','));
-    const uncut = solid.edges.filter(e => !cuts.includes(e.id));
-    for (let t = 0; t < 2000; t++) {
-      const parent = solid.faces.map((_, i) => i);
-      const find = i => parent[i] === i ? i : (parent[i] = find(parent[i]));
-      const hinges = [];
-      for (const e of shuffle(rng, uncut)) {
-        const [a, b] = e.f.map(find);
-        if (a !== b) { parent[a] = b; hinges.push(e.id); }
-      }
-      if (hinges.length !== F - 1) return null;
-      const net = unfold(solid, hinges, base);
-      if (!net || net.overlaps.length) continue;
-      if (paper && !sheetFit(net, ...paper).fits) continue;
-      plan = { hinges, cuts: solid.edges.map(e => e.id).filter(id => !hinges.includes(id)) };
-      return plan;
-    }
+    let found = solutions(solid, rules, { rng, within: cuts, limit: 1 })[0];
     // tight sheets: the unfolding search finds the rare nets that fit
-    for (let t = 0; t < 200; t++) {
+    for (let t = 0; !found && !rules.line && t < 200; t++) {
       const net = randomUnfolding(solid, seededRng('plan:' + t), { root: base, tries: 20, pick: 'any' });
-      if (!net || net.overlaps.length || net.hinges.some(h => cuts.includes(h))) continue;
-      if (paper && !sheetFit(net, ...paper).fits) continue;
-      plan = { hinges: net.hinges, cuts: solid.edges.map(e => e.id).filter(id => !net.hinges.includes(id)) };
-      return plan;
+      if (!net || net.hinges.some(h => cuts.includes(h))) continue;
+      const c = solid.edges.map(e => e.id).filter(id => !net.hinges.includes(id));
+      if (!verdict(solid, c, rules, base)) found = c;
     }
-    return null;
+    plan = found ? { cuts: found } : null;
+    return plan;
   }
 
   async function toggleFlat() {
@@ -269,7 +295,7 @@ function cutTask(item, solid, { workshop = false } = {}) {
   // ------------------------------------------------------------------
 
   stage.frame(view.group, { padding: 64 });
-  frame.title(workshop ? 'Free cutting' : TITLES.cut, FORMS[item.form].name);
+  frame.title(workshop ? 'Free cutting' : cutTitle(item), FORMS[item.form].name);
   frame.tools([
     { id: 'undo', label: 'Undo', key: 'Z', keys: ['Ctrl+Z'], run: () => { if (cuts.length) { setCuts(cuts.slice(0, -1)); sfx.tick(); } } },
     { id: 'reset', label: 'Reset', key: 'R', run: () => { if (cuts.length) { setCuts([]); sfx.slide(); } } },
@@ -308,12 +334,15 @@ function cutTask(item, solid, { workshop = false } = {}) {
       return { ok: false, strike: false, note: `It still holds together in places, so it can’t open flat yet. You need ${plural(need - cuts.length, 'more cut')}.` };
     },
     hint(n) {
-      if (n === 1) return { text: `A flat net of ${F} faces is held together by ${F - 1} uncut edges, so you need ${need} cuts in all. Freeing the faces around one corner is a good start.` };
+      if (n === 1) return { text: rules.line ? `One unbroken line through all ${solid.verts.length} corners opens it, passing each corner once. Plan the route before you start: a line that doubles back on itself gets stuck.`
+        : rules.keep ? `Cut between two shaded faces only where they would still hold together another way round. The unshaded faces then hang off the shaded strip.`
+        : `A flat net of ${F} faces is held together by ${F - 1} uncut edges, so you need ${need} cuts in all. Freeing the faces around one corner is a good start.` };
       const p = findPlan();
       if (!p) return { text: 'With these cuts it can’t open into one flat piece any more. Undo the last few and try another way.' };
       const left = p.cuts.filter(e => !cuts.includes(e));
       if (n === 2) {
-        const e = left.find(id => !picker.hidden(view.edgeMid(id), view.faces)) ?? left[0];
+        const next = left.filter(id => !rules.line || !lineStep(solid, cuts, id));
+        const e = next.find(id => !picker.hidden(view.edgeMid(id), view.faces)) ?? next[0] ?? left[0];
         return { text: 'Here is one cut that leads to a good net.', culprits: [{ at: at(() => view.edgeMid(e)), r: 20, note: 'cut here' }] };
       }
       marked = new Set(left);
@@ -359,7 +388,7 @@ function matchTask(item, solid) {
   view.setEdgeStyles(solid.edges.map(e => hinge.has(e.id) ? 'fold' : 'visible'));
   view.setFacePolys(net.pose(0));
   lift(view, .5, 0);
-  const qs = matchEdges(net, rng, 3);
+  const qs = matchEdges(net, rng, 3, { far: !!item.far });
   let qi = 0, busy = false;
 
   const mark = createLines([], 'signal', { on: 'model', renderOrder: 4 });
@@ -584,11 +613,15 @@ function foldTask(item, solid) {
   })();
   let refView = null;
 
+  // twin levels show one net again and again, sometimes with a single face moved
+  const twinNet = item.twin ? tableNet(solid, rng, { pick: 'any' }) : null;
+  const twinBad = shuffle(rng, [true, false, true]);
+
   // a new net: about half the time one face hangs from the wrong edge
   function deal() {
     view?.dispose();
-    const net = tableNet(solid, rng, { pick: 'any' });
-    const bad = rng() < .55 ? misfit(solid, net, rng) : null;
+    const net = twinNet || tableNet(solid, rng, { pick: 'any' });
+    const bad = (twinNet ? twinBad[round % 3] : rng() < .55) ? misfit(solid, net, rng) : null;
     view = addView(solid);
     view.setEdgeStyles(solid.edges.map(() => 'visible'));
     const pose = bad ? misfitPose(solid, net, bad) : net.pose;
@@ -603,7 +636,7 @@ function foldTask(item, solid) {
       refView = addView(placed);
     }
     stage.frame(stage.content, { padding: 48 });
-    frame.sub(`Would this net fold up into the solid beside it, with no gaps and no faces doubled up?<span class="udp-count">net ${wins + 1} / ${rounds}</span>`, true);
+    frame.sub(`${twinNet && round ? 'The same net again, or is it? A single face may have moved to another edge.' : 'Would this net fold up into the solid beside it, with no gaps and no faces doubled up?'}<span class="udp-count">net ${wins + 1} / ${rounds}</span>`, true);
     frame.tools(tools());
     viewKeys();
     stage.invalidate();
@@ -696,6 +729,304 @@ function foldTask(item, solid) {
 }
 
 // ------------------------------------------------------------------
+// the model standing beside a flat net (draw and fix)
+// ------------------------------------------------------------------
+
+// a copy of the solid to the right of the net, or below it on a tall screen
+function besideNet(solid, flatPolys) {
+  const pts = flatPolys.flatMap(q => q.pts);
+  const lo = [0, 1].map(a => Math.min(...solid.verts.map(v => v[a]))), hi = [0, 1].map(a => Math.max(...solid.verts.map(v => v[a])));
+  const nx0 = Math.min(...pts.map(p => p[0])), nx1 = Math.max(...pts.map(p => p[0])), ny0 = Math.min(...pts.map(p => p[1])), ny1 = Math.max(...pts.map(p => p[1]));
+  const tall = stage.rect.h > stage.rect.w * 1.2;
+  const ox = tall ? (nx0 + nx1) / 2 - (hi[0] - lo[0]) / 2 - lo[0] : nx1 + 1.6 - lo[0];
+  const oy = tall ? ny1 + 1.6 - lo[1] : (ny0 + ny1) / 2 - (hi[1] - lo[1]) / 2 - lo[1];
+  return addView(mapSolid(solid, v => [v[0] + ox, v[1] + oy, v[2]]));
+}
+
+// ------------------------------------------------------------------
+// task: draw on the net
+// ------------------------------------------------------------------
+
+// A mark drawn on a face of the folded solid, as segments: a door stands on the
+// bottom edge of a wall, a window or skylight sits in the middle.
+function glyph(solid, fid, kind) {
+  const f = solid.faces[fid], P = f.loop.map(i => solid.verts[i]);
+  const c = P.reduce((s, p) => add3(s, mul3(p, 1 / P.length)), [0, 0, 0]);
+  let d = sub3([0, 0, -1], mul3(f.n, -f.n[2]));
+  if (Math.hypot(...d) < .3) d = sub3(P[1], P[0]);
+  d = norm3(d);
+  const s = cross3(f.n, d);
+  const along = u => P.map(p => dot3(sub3(p, c), u));
+  const W = Math.max(...along(s)) - Math.min(...along(s)), H = Math.max(...along(d)) - Math.min(...along(d));
+  const at = (x, y) => add3(c, add3(mul3(s, x), mul3(d, y)));
+  if (kind === 'door') {
+    const w = Math.min(.5, W * .28) / 2, bottom = Math.max(...along(d)), top = bottom - Math.min(1.05, H * .55);
+    return [[at(-w, bottom), at(-w, top)], [at(-w, top), at(w, top)], [at(w, top), at(w, bottom)]];
+  }
+  const a = Math.min(.42, W * .3, H * .3) / 2;
+  const q = [at(-a, -a), at(a, -a), at(a, a), at(-a, a)];
+  return [[q[0], q[1]], [q[1], q[2]], [q[2], q[3]], [q[3], q[0]], [at(0, -a), at(0, a)]];
+}
+const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const mul3 = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const norm3 = a => mul3(a, 1 / (Math.hypot(...a) || 1));
+
+// carry points on a face from one placement of it (src polygon) to another (dst), a hair off the face
+function faceMap(src, dst) {
+  const fr = P => {
+    const o = P[0], x = norm3(sub3(P[1], P[0]));
+    let n = [0, 0, 0];
+    for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; n = add3(n, cross3(a, b)); }
+    n = norm3(n);
+    return { o, x, y: cross3(n, x), n };
+  };
+  const A = fr(src), B = fr(dst);
+  return p => {
+    const v = sub3(p, A.o);
+    return add3(B.o, add3(mul3(B.x, dot3(v, A.x)), add3(mul3(B.y, dot3(v, A.y)), mul3(B.n, dot3(v, A.n) + .006))));
+  };
+}
+
+function drawTask(item, solid) {
+  const rng = seededRng('draw:' + item.id + ':' + (item.seed ?? ''));
+  let net = null, plan = null;
+  // the faces turned toward the camera, so every asked mark can be seen on the model
+  stage.rig.camera.updateMatrixWorld();
+  const m = stage.rig.camera.matrixWorld.elements, eye = [m[8], m[9], m[10]];
+  const seen = f => dot3(solid.faces[f].n, eye) > .2;
+  for (let t = 0; t < 12 && !plan; t++) { net = tableNet(solid, rng); plan = net && drawRounds(solid, net, rng, { n: 3, hard: !!item.hard, seen }); }
+  const { ref, asks } = plan;
+  const folded = solid.faces.map(f => f.loop.map(i => solid.verts[i]));
+  const upright = f => Math.abs(solid.faces[f].n[2]) < .01;
+  const kinds = asks.map((f, i) => !upright(f) ? 'skylight' : i === 0 || !asks.slice(0, i).some(upright) ? 'door' : 'window');
+  const marks = [{ f: ref, kind: 'window' }, ...asks.map((f, i) => ({ f, kind: kinds[i] }))];
+  const segsOf = marks.map(m => glyph(solid, m.f, m.kind));
+
+  const view = addView(solid);
+  view.setEdgeStyles(solid.edges.map(e => net.hinges.includes(e.id) ? 'fold' : 'visible'));
+  view.setFacePolys(net.pose(0));
+  lift(view, .5, 0);
+  const model = besideNet(solid, net.pose(0));
+  const mOff = sub3(model.solid.verts[0], solid.verts[0]);
+
+  // ink for marks already drawn, signal for the one asked about
+  const netInk = createLines([], 'visible', { on: 'model', renderOrder: 4 }), netNew = createLines([], 'signal', { on: 'model', renderOrder: 4 });
+  const modelInk = createLines([], 'visible', { on: 'model', renderOrder: 4 }), modelAsk = createLines([], 'signal', { on: 'model', renderOrder: 4 });
+  view.group.add(netInk, netNew);
+  model.group.add(modelInk, modelAsk);
+  let qi = 0, busy = false, flash = -1;
+
+  const onNet = i => { const f = marks[i].f, m = faceMap(folded[f], view.facePoly(f)); return segsOf[i].map(([a, b]) => [m(a), m(b)]); };
+  const onModel = i => { const m = faceMap(folded[marks[i].f], folded[marks[i].f].map(p => add3(p, mOff))); return segsOf[i].map(([a, b]) => [m(a), m(b)]); };
+  function drawMarks() {
+    const done = [0, ...asks.slice(0, qi).map((_, k) => k + 1)];
+    netInk.setSegments(done.filter(i => i !== flash).flatMap(onNet));
+    netNew.setSegments(flash >= 0 ? onNet(flash) : []);
+    modelInk.setSegments(done.flatMap(onModel));
+    modelAsk.setSegments(qi < asks.length ? onModel(qi + 1) : []);
+    stage.invalidate();
+  }
+  function show() {
+    const k = kinds[qi];
+    frame.sub(qi === 0
+      ? `Model makers draw on the flat sheet before they fold it. Tap the face of the net where the orange ${k} belongs.<span class="udp-count">${qi + 1} / ${asks.length}</span>`
+      : `Now the ${k}. Tap the face of the net where it belongs.<span class="udp-count">${qi + 1} / ${asks.length}</span>`, true);
+    drawMarks();
+  }
+
+  async function playNet(t0, t1, duration) {
+    await animate({ from: t0, to: t1, duration, ease: ease.cubicInOut, essential: true,
+      update: v => { view.setFacePolys(net.pose(v)); drawMarks(); } }).promise;
+  }
+  async function peek() {
+    if (busy) return;
+    busy = true; session.peek(); sfx.flap();
+    await playNet(0, .5, 700);
+    await wait(700, { essential: true });
+    await playNet(.5, 0, 600);
+    busy = false;
+  }
+
+  function answer(f) {
+    const want = asks[qi], k = kinds[qi];
+    if (f === want) {
+      sfx.step(qi);
+      flash = qi + 1;
+      qi++;
+      drawMarks();
+      if (qi >= asks.length) { session.check(); return; }
+      setTimeout(() => { flash = -1; show(); }, 500);
+      return;
+    }
+    const note = f === net.root ? 'That is the face the model stands on, so it ends up underneath.'
+      : marks.slice(0, qi + 1).some(m => m.f === f) ? 'That face already has its drawing.'
+      : `That face folds up into the side circled on the model. The ${k} is on another side.`;
+    session.miss({ note, culprits: f === net.root ? [] : [{ at: at(() => model.faceCentre(f)), r: 34 }] });
+    model.flashFaces([f], { times: 2, period: 380 });
+  }
+
+  stage.frame(stage.content, { padding: 44 });
+  frame.title(TITLES.draw, FORMS[item.form].name);
+  frame.tools([
+    { id: 'peek', label: 'Peek', key: 'P', title: 'Fold it halfway for a moment (you lose the third mark)', run: peek },
+    { id: 'hint', label: 'Hint', key: 'H', run: () => session.hint() },
+  ]);
+  viewKeys();
+  frame.primary({ label: 'Draw', disabled: true });
+  show();
+
+  return {
+    view,
+    _answer: () => asks[qi],
+    answer,
+    pick: ev => { if (busy || qi >= asks.length) return null; const h = picker.face(ev, view.faces); return h ? { id: h.faceId } : null; },
+    hover: (t, prev) => {
+      if (prev) view.setFaceState(prev.id, 'normal');
+      if (t) view.setFaceState(t.id, 'hover');
+      stage.invalidate();
+    },
+    tap(ev) {
+      if (busy || qi >= asks.length) return;
+      const h = picker.face(ev, view.faces);
+      if (h) answer(h.faceId);
+    },
+    check: () => ({ ok: qi >= asks.length }),
+    hint(n) {
+      const want = asks[qi];
+      if (!want && want !== 0) return null;
+      if (n === 1) return { text: 'Start from the face lying in the middle of the net: the model stands on it. Then find the face that already has a window, and turn the net in your head from there.' };
+      if (n === 2) {
+        const d = netDistance(want, ref);
+        return { text: `On the net, the ${kinds[qi]} is ${d} ${d === 1 ? 'hinge' : 'hinges'} away from the face with the grey window.` };
+      }
+      return { text: 'It goes on this face.', culprits: [{ at: at(() => view.faceCentre(want)), r: 30 }] };
+    },
+    async solved() {
+      busy = true;
+      flash = -1;
+      sfx.flap();
+      lift(view, 0, 1700);
+      await playNet(0, 1, 1700);
+      sfx.thud();
+      stage.frame(stage.content, { padding: 56 });
+      await wait(300);
+    },
+    dispose() { netInk.dispose(); netNew.dispose(); modelInk.dispose(); modelAsk.dispose(); model.dispose(); view.dispose(); },
+  };
+
+  function netDistance(f, g) {
+    const up = x => { const out = [x]; while (net.parent[x] >= 0) { const e = solid.edges[net.parent[x]]; x = e.f[0] === x ? e.f[1] : e.f[0]; out.push(x); } return out; };
+    const A = up(f), B = up(g), i = A.findIndex(x => B.includes(x));
+    return i + B.indexOf(A[i]);
+  }
+}
+
+// ------------------------------------------------------------------
+// task: mend the net
+// ------------------------------------------------------------------
+
+function fixTask(item, solid) {
+  const rng = seededRng('fix:' + item.id + ':' + (item.seed ?? ''));
+  let net = null, mis = null;
+  // the stray face should be one the player can see on the model
+  stage.rig.camera.updateMatrixWorld();
+  const m = stage.rig.camera.matrixWorld.elements, seen = f => dot3(solid.faces[f].n, [m[8], m[9], m[10]]) > .2;
+  for (let t = 0; t < 40 && !(mis && seen(mis.leaf)); t++) { const n2 = tableNet(solid, rng, { pick: 'any' }), m2 = n2 && misfit(solid, n2, rng); if (m2 && (!mis || seen(m2.leaf))) { net = n2; mis = m2; } }
+  const leaf = mis.leaf, oldHinge = net.parent[leaf];
+  const pose0 = misfitPose(solid, net, mis);
+  const view = addView(solid);
+  const hinges = new Set(net.hinges.filter(h => h !== oldHinge));
+  view.setEdgeStyles(solid.edges.map(e => hinges.has(e.id) ? 'fold' : 'visible'));
+  view.setFacePolys(pose0(0));
+  view.setFaceState(leaf, 'selected');
+  lift(view, .5, 0);
+  const model = besideNet(solid, pose0(0));
+  model.setFaceState(leaf, 'selected');
+  let busy = false, done = null;
+
+  frame.title(TITLES.fix, FORMS[item.form].name);
+  frame.sub('The orange face is joined along the wrong edge, so this net won’t fold. Find it on the model, then tap the edge of the net where it really belongs.');
+  frame.tools([
+    { id: 'peek', label: 'Peek', key: 'P', title: 'Fold it halfway for a moment (you lose the third mark)', run: peek },
+    { id: 'hint', label: 'Hint', key: 'H', run: () => session.hint() },
+  ]);
+  viewKeys();
+  frame.primary({ label: 'Mend', disabled: true });
+  stage.frame(stage.content, { padding: 44 });
+
+  // the free edges of the rest of the net: where the face could hang instead
+  const candidates = () => view.edgeSegments().filter(s => s.f !== leaf && !hinges.has(s.id) && !(s.id === mis.to.e && s.f === mis.to.f));
+
+  async function peek() {
+    if (busy) return;
+    busy = true; session.peek(); sfx.flap();
+    await play(view, pose0, 0, .5, { duration: 700 });
+    await wait(700, { essential: true });
+    await play(view, pose0, .5, 0, { duration: 600 });
+    busy = false;
+  }
+
+  async function answer(eid) {
+    const r = mended(solid, net, leaf, eid);
+    if (r.ok) {
+      busy = true;
+      done = r.net;
+      sfx.snip();
+      // the face swings over to its new edge on the table, then the net folds
+      const from = view.facePoly(leaf).map(p => p.slice()), to = r.net.pose(0)[leaf].pts;
+      await animate({ duration: 700, ease: ease.cubicInOut, essential: true, update: v => {
+        const all = pose0(0);
+        all[leaf] = { f: leaf, pts: from.map((p, k) => lerp3(p, to[k], v).map((x, j) => j === 2 ? x + Math.sin(v * Math.PI) * .8 : x)) };
+        view.setFacePolys(all); stage.invalidate();
+      } }).promise;
+      view.setEdgeStyles(solid.edges.map(e => r.net.hinges.includes(e.id) ? 'fold' : 'visible'));
+      busy = false;
+      session.check();
+      return;
+    }
+    session.miss({ note: r.why === 'overlap' ? 'That is one of its true edges, but laid flat there it would cover another face. Try another of its edges.'
+      : 'On the model, the orange face doesn’t touch that edge. Look at which faces it meets there.', culprits: [{ at: at(() => model.faceCentre(leaf)), r: 34 }] });
+  }
+
+  return {
+    view,
+    _answer: () => net.parent[leaf],
+    answer,
+    pick: ev => busy || done ? null : picker.edge(ev, candidates(), { px: 12 }),
+    hover: t => { view.hoverEdge(t ? t.id : null); stage.invalidate(); },
+    tap(ev) {
+      if (busy || done) return;
+      const hit = picker.edge(ev, candidates(), { px: 12 });
+      if (hit) answer(hit.id);
+    },
+    check: () => ({ ok: !!done }),
+    hint(n) {
+      const nb = solid.faces[leaf].edges.map(e => solid.edges[e]).map(e => e.f[0] === leaf ? e.f[1] : e.f[0]);
+      if (n === 1) return { text: `On the model, the orange face touches ${nb.length} other faces. Its true place is along an edge of one of them.` };
+      const host = parentOf(leaf);
+      if (n === 2) return { text: 'It belongs on one of the edges of this face.', culprits: [{ at: at(() => view.faceCentre(host)), r: 34 }] };
+      return { text: 'It hangs from this edge.', culprits: [{ at: at(() => view.edgeMid(oldHinge, host)), r: 16 }] };
+    },
+    async solved() {
+      busy = true;
+      view.setFaceState(leaf, 'normal');
+      sfx.flap();
+      lift(view, 0, 1600);
+      await play(view, done.pose, 0, 1, { duration: 1600 });
+      sfx.thud();
+      stage.frame(stage.content, { padding: 56 });
+      await wait(300);
+    },
+    dispose() { model.dispose(); view.dispose(); },
+  };
+
+  function parentOf(f) { const e = solid.edges[net.parent[f]]; return e.f[0] === f ? e.f[1] : e.f[0]; }
+}
+
+// ------------------------------------------------------------------
 // the camera keys every task shares
 // ------------------------------------------------------------------
 
@@ -725,6 +1056,8 @@ function load(item) {
   task = item.task === 'cut' ? cutTask(item, solid)
     : item.task === 'match' ? matchTask(item, solid)
     : item.task === 'which' ? whichTask(item, solid)
+    : item.task === 'draw' ? drawTask(item, solid)
+    : item.task === 'fix' ? fixTask(item, solid)
     : foldTask(item, solid);
   if (task.view?.group) stage.invalidate();
 }
@@ -757,7 +1090,7 @@ function generate(rng, difficulty, i) {
 const def = {
   id: 'developments', prefix: 'D', name: 'Developments',
   lead: 'Nets and solids.',
-  sub: 'Cut solids open, match the edges that glue, and fold nets in your head: from a cube to a basilica.',
+  sub: 'Cut solids open, find where the edges glue, draw on the flat sheet and mend broken nets, from a cube to a basilica.',
   packs,
   load,
   check: () => task.check(),
