@@ -391,7 +391,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .udp-hub-daily { text-align: right; font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--grey2); }
 .udp-hub-daily .udp-big { font-family: var(--f-sans); font-size: 56px; font-weight: 300; letter-spacing: -.03em; line-height: 1; color: var(--ink); margin: 6px 0 8px; }
 .udp-families { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 48px; margin-top: 40px; }
-.udp-family > .udp-k { display: flex; justify-content: space-between; border-top: 1px solid var(--grey4); padding-top: 14px; }
+.udp-family > .udp-k { display: flex; flex-wrap: wrap; gap: 4px 14px; justify-content: space-between; border-top: 1px solid var(--grey4); padding-top: 14px; }
 .udp-gcard { display: block; position: relative; padding: 6px 0 22px; color: var(--ink); }
 .udp-gcard-model { position: relative; height: 210px; margin: 0 -12px; }
 .udp-gcard-head { display: grid; grid-template-columns: 44px 1fr; gap: 14px; align-items: center; }
@@ -495,3 +495,53 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   .st-why { max-width: 180px; }
 }
 .udp-label.st-why { white-space: normal; max-width: 260px; text-align: center; line-height: 1.35; }
+
+/* ------------------------------------------------------------------ */
+/* phone on its side: three columns, the title, the model, the card    */
+/* (after the phone block, so it wins on a narrow phone too)           */
+/* ------------------------------------------------------------------ */
+
+@media (max-height: 500px) and (orientation: landscape) {
+  :root { --m: 20px; --mt: 10px; }
+  .udp-head { max-width: 30vw; }
+  .udp-brand { font-size: 9.5px; letter-spacing: .22em; gap: 0 .6em; }
+  .udp-brand .udp-long { display: none; }
+  .udp-title { font-size: 21px; margin-top: 6px; }
+  .udp-sub { font-size: 12px; line-height: 1.4; margin-top: 6px; }
+  .udp-msg { font-size: 13.5px; margin-top: 6px; }
+  .udp-stat { font-size: 10px; letter-spacing: .06em; }
+  .udp-stat-top { flex-direction: row; gap: .7em; align-items: baseline; }
+  .udp-timer { font-size: 26px; margin-top: 2px; }
+  .udp-stat-bot { margin-top: 3px; display: block; }
+  .udp-stat-bot .udp-dot { display: inline; margin: 0 .5em; }
+  .udp-delta { margin-top: 2px; }
+  .udp-bar { flex-wrap: nowrap; gap: 18px; bottom: 4px; }
+  .udp-bar-tools { gap: 18px; flex-wrap: nowrap; }
+  .udp-btn { min-height: 36px; font-size: 12px; }
+  .udp-rule { order: 0; flex: 1 1 40px; margin: 0; }
+  .udp-run { order: 0; font-size: 12px; }
+  .udp-bar-end { order: 0; width: auto; margin-left: auto; gap: 16px; }
+  .udp-util { gap: 14px; }
+  .udp-primary { flex: none; min-height: 36px; padding: 0 18px; max-width: none; }
+
+  /* every card stands in the right column, under the clock */
+  .udp-card, .udp-card.is-plan, .udp-card.is-tray { left: auto; right: var(--m); top: 82px; bottom: auto; width: auto; padding-top: 6px; }
+  .udp-card-k { font-size: 9.5px; letter-spacing: .2em; }
+  .udp-card-body { width: calc(100vh - 168px); height: calc(100vh - 168px); margin-top: 2px; }
+  .udp-card.is-plan .udp-card-body { width: 40vw; height: calc(100vh - 168px); }
+  .udp-card.is-tray .udp-card-body { width: 36vw; height: auto; max-height: calc(100vh - 168px); }
+  .udp-card.is-log { display: none; }
+  .rf-legend { font-size: 9px; gap: 2px 12px; }
+  .rf-key svg { width: 24px; }
+
+  .udp-legend { left: auto; right: var(--m); bottom: 48px; max-height: calc(100vh - 64px); overflow-y: auto; }
+  .udp-sheetwrap { left: auto; right: var(--m); width: min(430px, 54vw); bottom: 4px; }
+  .udp-sheetwrap .udp-headline { font-size: 19px; margin-bottom: 8px; }
+  .udp-sheetwrap .udp-note { font-size: 13px; margin-bottom: 6px; }
+  .udp-sheetwrap .udp-actions { margin-top: 8px; gap: 18px; }
+  .udp-tb { font-size: 11px; grid-template-columns: 1fr 1fr 70px; }
+  .udp-tb > div { padding: 4px 9px 5px; }
+  .udp-tb .tb-sheet .tb-v, .udp-tb .tb-grade .tb-v { font-size: 20px; }
+  .udp-tut-bar { bottom: 52px; }
+  .udp-map-title, .udp-hub-title { font-size: 30px; }
+}

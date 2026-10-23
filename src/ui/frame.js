@@ -87,7 +87,9 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
   let stacked = false;                                   // true: the model sits under the title, never beside it
   function freeRect() {
     const W = window.innerWidth, H = window.innerHeight;
-    const phone = W <= 820;
+    // a phone on its side lays out in three columns (title, model, card), like a wide screen
+    const side = H <= 500 && W > H;
+    const phone = W <= 820 && !side;
     const hb = head.getBoundingClientRect(), sb = stat.getBoundingClientRect(), bb = bar.getBoundingClientRect();
     const top = Math.max(hb.bottom, sb.bottom) + (phone ? 4 : 8);
     let bottom = bb.top - (phone ? 4 : 12);
@@ -95,18 +97,22 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
     const cb = card.hidden ? null : card.getBoundingClientRect();
     if (cb && cb.height > 0) {                      // a card can be hidden by CSS on a phone
       if (phone) bottom = Math.min(bottom, cb.top - 4);
-      else right = Math.min(right, cb.left - 24);
+      else right = Math.min(right, cb.left - (side ? 12 : 24));
     }
     // the summary sheet, when it is up, keeps its corner too
     const sheet = document.querySelector('.udp-sheetwrap.is-on');
     const shb = sheet ? sheet.getBoundingClientRect() : null;
     if (shb && shb.height > 0) {
       if (phone) bottom = Math.min(bottom, shb.top - 4);
-      else right = Math.min(right, shb.left - 24);
+      else right = Math.min(right, shb.left - (side ? 12 : 24));
     }
-    // on a wide screen the title column sits beside the model, not above it
+    // on a wide screen (and a phone on its side) the title column sits beside
+    // the model, not above it
     let y0 = top;
-    if (!phone && W > 1100 && !stacked) {
+    if (side) {
+      y0 = 6;
+      if (!root.classList.contains('is-hidden')) left = Math.max(left, hb.right + 8);
+    } else if (!phone && W > 1100 && !stacked) {
       y0 = Math.max(sb.bottom + 8, 72);
       left = Math.max(left, hb.right + 16);
       if (left > W * .42) { left = 0; y0 = top; }
