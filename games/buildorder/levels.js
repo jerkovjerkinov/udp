@@ -25,14 +25,22 @@ export const PACKS = [
     L('A2', 'free', 'Colonnade', 'colonnade', { n: 3 }),
     L('A3', 'assemble', 'Trilithon', 'trilithon', { span: 3 }),
     L('A4', 'keep', 'Open wall', 'wall', { courses: 5, len: 3 }, { keep: '^w4_', target: 6, order: 'w2_1 w1_2 w3_0 w1_0 w3_2 w0_1' }),
-    L('A5', 'test', 'Colonnade', 'colonnade', { n: 4 }),
-    L('A6', 'assemble', 'Corbelled opening', 'corbel', { courses: 3 }),
-    L('A7', 'keep', 'A ruin', 'temple', { n: 4 }, { keep: '^p[lr]$', target: 5, order: 'c1 k1 s1_1 a1 s0_1' }),
+    // twist: the balcony stone can't stand until the wall above holds its tail, so a prop goes in first
+    L('A5', 'assemble', 'Stone balcony', 'balcony', { out: 1.6, prop: true }, { learn: 'A stone that juts out stays up only while the wall above presses its tail down. Until then, the prop held it.' }),
+    // twist: the blocks that look freest, on top, are the ones holding the balcony
+    L('A6', 'keep', 'Balcony', 'balcony', { out: 1.6 }, { keep: '^bal$', target: 7, order: 'w3_3 w1_2 w3_0 w0_1 w3_1 w2_0 w1_0', learn: 'The top blocks looked free, but they were the counterweight. Take them away and the balcony tips forward.' }),
+    // breather: read the temple, part by part
+    L('A7', 'free', 'Temple front', 'temple', { n: 4 }, { learn: 'Only parts with nothing resting on them, and a clear way out, can come away.' }),
     L('A8', 'dismantle', 'Temple front', 'temple', { n: 4 }),
   ] },
   { id: 'B', name: 'Arches', brief: 'An arch’s wedge-shaped stones can’t stand on their own. They rest on a timber frame, the centering, until the keystone goes in at the top. Then the arch holds itself up and pushes outward on its supports.', levels: [
     L('B1', 'assemble', 'Round arch', 'arch', { m: 5 }),
-    L('B2', 'test', 'Seven stones', 'arch', { m: 7 }),
+    // an experiment, in order: the arch on its own, without its keystone, and on its centering again
+    L('B2', 'test', 'Without the keystone', 'arch', { m: 5 }, { cases: [
+      { without: [], say: 'Here is the arch with its centering already taken away, so only the stones are left. Will it stand on its own?' },
+      { without: ['v2'], say: 'Now the keystone, the stone at the very top, is left out, and there is still no centering. Will it stand?' },
+      { without: ['v2'], with: ['c'], say: 'The keystone is still missing, but the centering is back under the stones. Will it stand?' },
+    ], learn: 'An arch stands on its own only when the keystone locks it. Until then, the centering does the work.' }),
     L('B3', 'dismantle', 'Taking down an arch', 'arch', { m: 7 }),
     L('B4', 'assemble', 'Arcade', 'arcade', { count: 2 }),
     L('B5', 'assemble', 'Low arch', 'arch', { m: 5, r: 2.2, t: .7, h: 1.4 }),

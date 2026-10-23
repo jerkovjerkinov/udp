@@ -26,6 +26,15 @@ const ok = (cond, msg) => { n++; if (!cond) { fails++; console.log('FAIL', msg);
   ok(!settle(m, open).stands, 'without the keystone it falls');
   ok(settle(m, [...open, 'c']).stands, 'on its centering it stands');
 }
+// a balcony stone stands only while the blocks over its tail hold it down
+{
+  const m = buildModel('balcony', { out: 1.6 });
+  ok(settle(m, [...m.goal]).stands, 'the balcony wall stands');
+  ok(!settle(m, [...m.goal].filter(id => id !== 'w3_1' && id !== 'w3_2')).stands, 'without the blocks over its tail the balcony tips');
+  const mp = buildModel('balcony', { out: 1.6, prop: true });
+  const low = [...mp.goal].filter(id => /^w[01]_/.test(id));
+  ok(!settle(mp, [...low, 'bal']).stands && settle(mp, [...low, 'bal', 'prop']).stands, 'on the prop it stands, without it it falls');
+}
 // a corbel stands only with the blocks behind it holding it down
 {
   const m = buildModel('corbel', { courses: 4 });
@@ -54,7 +63,7 @@ for (const pk of PACKS) for (const l of pk.levels) {
     ok(good === l.target, `${l.id} its order takes out ${l.target} and keeps it up (got ${good})`);
   }
   if (l.task === 'test') {
-    const cs = testCases(m, V, seededRng('test:' + l.id + ':'));
+    const cs = l.cases ? l.cases.map(c => V.check([...m.goal].filter(id => !c.without.includes(id)).concat(c.with || []))) : testCases(m, V, seededRng('test:' + l.id + ':'));
     ok(cs.length === 3, l.id + ' has three versions');
     ok(cs.some(c => c.stands) && cs.some(c => !c.stands), l.id + ' some stand and some fall');
   }

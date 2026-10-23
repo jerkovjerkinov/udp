@@ -58,7 +58,7 @@ function parOf(l) {
 }
 const packs = PACKS.map(pk => ({
   ...pk,
-  levels: pk.levels.map(l => ({ ...l, label: `${l.name} · ${TASK_TAGS[l.task]}`, par: parOf(l) })),
+  levels: pk.levels.map(l => ({ ...l, label: `${l.name} · ${TASK_TAGS[l.task]}`, par: parOf(l), note: l.learn })),
 }));
 
 // names, as a sentence: "the lintel", "Column 2 and Architrave 1", "Column 2, Architrave 1 and 3 more"
@@ -383,7 +383,7 @@ function assembleTask(item, m, V) {
     const temps = m.parts.filter(p => p.temp);
     const left = [...m.goal].filter(id => !present.has(id)).length;
     log.note(`${m.goal.size - left} of ${m.goal.size} in`);
-    frame.sub(`Tap the parts in an order that keeps everything standing. A part placed where nothing holds it up will fall.${temps.length ? ' The timber centering goes in first and comes out last; tap it again to take it away.' : ''}<span class="udp-count"><em>${left}</em> to go</span>`, true);
+    frame.sub(`Tap the parts in an order that keeps everything standing. ${temps.length ? `The timber ${lower(temps[0].name)} only helps while you build: it goes in before what it holds, and you tap it again at the end to take it away.` : 'A part placed where nothing holds it up will fall.'}<span class="udp-count"><em>${left}</em> to go</span>`, true);
     frame.tool('undo', { off: !done.length });
   }
   // the way in: along the part's own line if that is clear, else any clear one
@@ -423,7 +423,7 @@ function assembleTask(item, m, V) {
         return;
       }
       await v.fly(id, [0, 0, 0], away(r.dir), { duration: 520 });
-      session.miss({ note: fellNote(m, 'The centering came out too soon', verdict.falling), label: 'Collapse' });
+      session.miss({ note: fellNote(m, `The ${lower(p.name)} came out too soon`, verdict.falling), label: 'Collapse' });
       await collapse(v, m, rest, verdict);
       present.add(id); done.pop(); log.pop(); refresh();
       await v.fly(id, away(r.dir), [0, 0, 0], { duration: 520 });
@@ -691,7 +691,11 @@ function keepTask(item, m, V) {
 
 function testTask(item, m, V) {
   const v = addView(m);
-  const cases = testCases(m, V, seededRng('test:' + item.id + ':' + (item.seed ?? '')));
+  // a level can set its own versions, in order (a small experiment), or let the search pick them
+  const cases = item.cases ? item.cases.map(c => {
+    const w = c.with || [], v = V.check([...m.goal].filter(id => !c.without.includes(id)).concat(w));
+    return { without: c.without, with: w, say: c.say, stands: v.stands, falling: v.falling, lean: v.lean };
+  }) : testCases(m, V, seededRng('test:' + item.id + ':' + (item.seed ?? '')));
   const temps = m.parts.filter(p => p.temp).map(p => p.id);
   stage.frame(v.box(), { padding: padOf() });
   frame.card(false);
@@ -704,7 +708,7 @@ function testTask(item, m, V) {
     for (const id of temps) if (!c.with.includes(id)) v.show(id, false);
     stage.invalidate();
     const gone = namesOf(m, c.without), w = c.with.length ? ` The ${namesOf(m, c.with).toLowerCase()} is still under it.` : '';
-    frame.sub(`Imagine the dashed ${lower(gone)} taken away.${w} Would the rest still stand?${touchScreen ? '' : ' Press S for stands or F for falls.'}<span class="udp-count">${round + 1} / ${cases.length}</span>`, true);
+    frame.sub(`${c.say || `Imagine the dashed ${lower(gone)} taken away.${w} Would the rest still stand?`}${touchScreen ? '' : ' Press S for stands or F for falls.'}<span class="udp-count">${round + 1} / ${cases.length}</span>`, true);
   }
   async function answer(stands) {
     if (busy || round >= cases.length) return;

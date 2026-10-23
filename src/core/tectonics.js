@@ -346,6 +346,27 @@ export function wall({ courses = 3, len = 3, depth = 1, b = 3 } = {}) {
   return parts;
 }
 
+// a wall with a stone balcony: a long stone set into the wall that juts out in
+// front. More of it juts out than is held in the wall, so it stays up only
+// while the courses above press its tail down. While it is built, a timber
+// prop under its front edge can hold it (prop: true)
+export function balcony({ courses = 4, at = 2, out = 1.4, prop = false } = {}) {
+  const { parts, add } = kit();
+  for (let c = 0; c < courses; c++) {
+    const cuts = c % 2 ? [0, 1, 3, 5, 6] : [0, 2, 4, 6];
+    for (let i = 0; i + 1 < cuts.length; i++) {
+      if (c === at && cuts[i] === 2) continue;
+      add(`w${c}_${i}`, `Course ${c + 1}, block ${i + 1}`, 'block', 'stone', box(cuts[i], 0, c, cuts[i + 1], 1, c + 1));
+    }
+  }
+  // it rests on the course below, and stays up on the prop or on the two blocks over its tail
+  const below = parts.filter(p => p.pieces[0].bbox[5] === at && p.pieces[0].bbox[3] > 2 && p.pieces[0].bbox[0] < 4).map(p => p.id);
+  const over = parts.filter(p => p.pieces[0].bbox[2] === at + 1 && p.pieces[0].bbox[3] > 2 && p.pieces[0].bbox[0] < 4).map(p => p.id);
+  add('bal', 'Balcony stone', 'corbel', 'stone', box(2, -out, at, 4, 1, at + 1), { slide: ['-y', '+z'], ...(prop ? { on: [[...below, 'prop'], [...below, ...over]] } : {}) });
+  if (prop) add('prop', 'Prop', 'prop', 'timber', box(2.8, -out, 0, 3.2, -out + .4, at), { temp: true, slide: ['-y', '-x', '+x'], on: [] });
+  return parts;
+}
+
 // a corbelled opening: courses step in from both sides, each block resting on
 // the one below and the back blocks, until a capstone spans the gap
 export function corbel({ courses = 3, gap = 3.6, step = .5 } = {}) {
@@ -644,7 +665,7 @@ export function domino({ storeys = 2, stair = true, cladding = false, lx = 5, ly
   return parts;
 }
 
-export const BUILDERS = { trilithon, colonnade, wall, corbel, temple, arch, arcade, deck, pergola, gableRoof, halfLap, logCrib, keyedFrame, steelFrame, domino };
+export const BUILDERS = { trilithon, colonnade, wall, balcony, corbel, temple, arch, arcade, deck, pergola, gableRoof, halfLap, logCrib, keyedFrame, steelFrame, domino };
 
 export function buildModel(name, opts = {}) {
   return createModel(BUILDERS[name](opts));
