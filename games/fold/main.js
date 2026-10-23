@@ -64,7 +64,7 @@ function question(item) {
 // the board in the side card
 function openCard(title, note, { interactive = false } = {}) {
   const body = frame.card(true, title, note);
-  document.querySelector('.udp-card').classList.add('is-plan');
+  document.querySelector('.udp-card').classList.add('is-plan', 'is-sheet');
   body.replaceChildren();
   const holder = document.createElement('div');
   holder.className = 'rf-board';
@@ -73,7 +73,7 @@ function openCard(title, note, { interactive = false } = {}) {
   frame.layout();
   return board;
 }
-function closeCard() { frame.card(false); document.querySelector('.udp-card').classList.remove('is-plan'); }
+function closeCard() { frame.card(false); document.querySelector('.udp-card').classList.remove('is-plan', 'is-sheet'); }
 
 // an open sheet on the board at offset off: paper, cell grid, holes
 const PAPER = '#d6d1c6';
@@ -129,8 +129,19 @@ function addPaper(n) {
   const pv = createPaperView(n);
   stage.content.add(pv.group);
   pv.show(flatSheet(n), []);
-  stage.frame(pv.box(), { padding: Math.max(10, Math.min(56, Math.min(stage.rect.w, stage.rect.h) * .1)) });
+  stage.frame(pv.box(), { padding: padOf() });
   return pv;
+}
+const padOf = () => { const m = Math.min(stage.rect.w, stage.rect.h); return Math.max(6, Math.min(56, m * (m < 260 ? .03 : .1))); };
+
+// frame what lies on the table now: the camera closes in as the sheet folds
+// smaller (on a phone a quarter sheet would otherwise be a few pixels across)
+function fitTo(pv, sheet, duration = 650) {
+  const b = new THREE.Box3();
+  for (const [x, y] of sheet.outline) b.expandByPoint(pv.toWorld(x, y, 0));
+  b.expandByScalar(.2);
+  b.max.z = Math.max(b.max.z, .3);
+  return stage.frame(b, { padding: padOf(), duration });
 }
 
 // fold through the states, then punch or cut; `cancel` stops it between steps
@@ -142,6 +153,7 @@ function performer(pv, q) {
     pv.clearChips();
     pv.setMark([]);
     pv.show(q.states[0], []);
+    fitTo(pv, q.states[0]);
     stage.invalidate();
     await wait(450, { essential: true });
     for (let i = 0; i < q.steps.length; i++) {
@@ -155,6 +167,7 @@ function performer(pv, q) {
       pv.setMark([]);
       sfx.flap();
       await pv.foldAnim(A, B, st, { duration: 850 });
+      fitTo(pv, B);
       await wait(160, { essential: true });
     }
     if (!alive()) return false;
@@ -177,6 +190,7 @@ function performer(pv, q) {
     ++token;
     pv.clearChips();
     pv.show(q.states[q.states.length - 1], holes);
+    fitTo(pv, q.states[0], 900);
     for (let i = q.steps.length - 1; i >= 0; i--) {
       sfx.flap();
       await pv.foldAnim(q.states[i], q.states[i + 1], q.steps[i], { reverse: true, duration: 800 });
@@ -409,6 +423,7 @@ function reverseTask(item, q) {
       sfx.flap();
       await pv.foldAnim(cur(), r.sheet, r.step, { duration: 700 });
       states.push(r.sheet); steps.push(r.step);
+      fitTo(pv, r.sheet);
       busy = false;
     } else if (a.punch) {
       if (!a.ok) { frame.say('Not on a crease: punch inside a cell.', { ms: 1800 }); sfx.error(); return; }
@@ -436,6 +451,7 @@ function reverseTask(item, q) {
       const B = states.pop(), st = steps.pop();
       sfx.flap();
       await pv.foldAnim(cur(), B, st, { reverse: true, duration: 600 });
+      fitTo(pv, cur());
       busy = false;
     }
     refresh();
@@ -451,6 +467,7 @@ function reverseTask(item, q) {
     const st = cur();
     const holes = punches.flatMap(p => holesOf(st, shapeAt('round', p)));
     pv.show(st, holes);
+    fitTo(pv, states[0], 900);
     for (let i = steps.length - 1; i >= 0; i--) { sfx.flap(); await pv.foldAnim(states[i], states[i + 1], steps[i], { reverse: true, duration: 700 }); }
     sfx.thud();
     busy = false;
@@ -460,6 +477,7 @@ function reverseTask(item, q) {
     for (let i = 0; i < steps.length; i++) { sfx.flap(); await pv.foldAnim(states[i], states[i + 1], steps[i], { duration: 500 }); }
     const st = cur();
     pv.show(st, punches.flatMap(p => holesOf(st, shapeAt('round', p))));
+    fitTo(pv, st);
     busy = false;
     refresh();
   }
