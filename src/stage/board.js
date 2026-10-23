@@ -268,6 +268,7 @@ export function createBoard(container, opts = {}) {
   // the item under the pointer: segments and points within tol px, polygons by inside
   //   opts: tol (10), kinds (['seg', 'path', 'poly', 'dot']), filter(item)
   function hit(ev, { tol = 10, kinds = ['seg', 'path', 'poly', 'dot'], filter } = {}) {
+    if (ev.pointerType === 'touch') tol = Math.max(tol, 22);   // a fingertip, not a cursor
     const r = root.getBoundingClientRect();
     const m = [ev.clientX - r.left, ev.clientY - r.top];
     const w = fromPx(m[0], m[1]);

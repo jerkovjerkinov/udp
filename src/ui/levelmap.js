@@ -59,7 +59,7 @@ export function createLevelMap(o) {
         <span><span class="md-name">${esc(m.name)}</span><span class="md-info">${m.info ? m.info(p) : ''}</span></span></button>`).join('');
 
     el.innerHTML = `<div class="udp-map-top">
-        <div><nav class="udp-brand"><a href="${o.hubHref || '../../index.html'}"><span class="udp-long">Unnamed Drawing Project</span></a><span class="udp-sep">·</span><span>${esc(o.name)}</span></nav>
+        <div><nav class="udp-brand"><a href="${o.hubHref || '../../index.html'}"><span class="udp-long">Unnamed Drawing Project</span><span class="udp-short">← All games</span></a><span class="udp-sep">·</span><span>${esc(o.name)}</span></nav>
           <h1 class="udp-map-title">${esc(o.lead || 'Sheet index.')}<b>${esc(o.name)}</b></h1>
           ${o.sub ? `<p class="udp-map-sub">${esc(o.sub)}</p>` : ''}</div>
         <div class="udp-map-stat"><span>Marks</span><div class="udp-big">${earned}<span style="color:var(--grey3)">/${allIds.length * 3}</span></div>

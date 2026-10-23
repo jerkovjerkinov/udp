@@ -132,14 +132,15 @@ function addPaper(n) {
   stage.frame(pv.box(), { padding: padOf() });
   return pv;
 }
-const padOf = () => { const m = Math.min(stage.rect.w, stage.rect.h); return Math.max(6, Math.min(56, m * (m < 260 ? .03 : .1))); };
+const phone = matchMedia('(pointer: coarse)').matches;
+const padOf = () => { const m = Math.min(stage.rect.w, stage.rect.h); return phone ? 4 : Math.max(6, Math.min(56, m * (m < 260 ? .03 : .1))); };
 
 // frame what lies on the table now: the camera closes in as the sheet folds
 // smaller (on a phone a quarter sheet would otherwise be a few pixels across)
 function fitTo(pv, sheet, duration = 650) {
   const b = new THREE.Box3();
   for (const [x, y] of sheet.outline) b.expandByPoint(pv.toWorld(x, y, 0));
-  b.expandByScalar(.2);
+  b.expandByScalar(phone ? .04 : .2);
   b.max.z = Math.max(b.max.z, .3);
   return stage.frame(b, { padding: padOf(), duration });
 }

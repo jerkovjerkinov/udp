@@ -18,7 +18,7 @@ import { createSession } from '../../src/ui/session.js';
 import { wait } from '../../src/fx/tween.js';
 import { sfx } from '../../src/fx/sfx.js';
 import { seededRng, pick } from '../../src/core/rand.js';
-import { SHAPES, oriented, turn, tip, drop, evaluate, WHY, ruleLines, RULE_NAMES, matchDrawings, levelFrom, cloneMods, K } from '../../src/core/stack.js';
+import { SHAPES, oriented, turn, tip, tipShown, drop, evaluate, WHY, ruleLines, RULE_NAMES, matchDrawings, levelFrom, cloneMods, K } from '../../src/core/stack.js';
 import { createStackView } from './view3d.js';
 import { PACKS } from './levels.js';
 
@@ -96,11 +96,12 @@ function createCard() {
   body.replaceChildren();
   const draw = document.createElement('div'); draw.className = 'st-drawings';
   const tray = document.createElement('div'); tray.className = 'st-tray';
+  const hand = document.createElement('div'); hand.className = 'st-hand';
   const rules = document.createElement('ul'); rules.className = 'st-rules';
-  body.append(draw, tray, rules);
+  body.append(draw, tray, hand, rules);
   frame.layout();
   return {
-    draw, tray, rules,
+    draw, tray, hand, rules,
     note(t) { frame.cardNote(t); },
     close() { card.classList.remove('is-tray'); frame.card(false); },
   };
@@ -162,6 +163,12 @@ function createPlay(item, lv, { free = false } = {}) {
       card.tray.innerHTML = order.map((t, i) => `<button type="button" class="st-mod${hand?.type === t ? ' is-on' : ''}${counts[t] ? '' : ' is-out'}" data-type="${t}"${counts[t] ? '' : ' disabled'}>
         ${iconOf(t, orient[t] ?? 0)}<span class="st-mod-name"><b>${i + 1}</b> ${esc(SHAPES[t].name)}</span><span class="st-mod-n">${free ? '∞' : '×' + counts[t]}</span></button>`).join('');
     }
+    // the module in hand, as it will land, and the two ways to turn it
+    const same = o => hand && JSON.stringify(oriented(hand.type, o)) === JSON.stringify(oriented(hand.type, hand.o));
+    card.hand.innerHTML = hand ? `<div class="st-hand-icon">${iconOf(hand.type, hand.o, 15)}</div>
+      <div class="st-hand-btns"><button type="button" class="st-rot" data-rot="turn"${same(turn(hand.o)) ? ' disabled' : ''}><span class="st-rot-i">↻</span>Turn<kbd>E</kbd></button>
+      <button type="button" class="st-rot" data-rot="tip"${same(tipShown(hand.type, hand.o)) ? ' disabled' : ''}><span class="st-rot-i">⤾</span>Tip<kbd>R</kbd></button></div>` : '';
+    card.hand.hidden = !hand;
     // rules
     const rows = [];
     const n = mods.length;
@@ -196,6 +203,10 @@ function createPlay(item, lv, { free = false } = {}) {
     const done = lv.task === 'fix' ? !hand : !left();
     if (!free) frame.primary({ label: 'Check', run: () => session.check(), disabled: false, ready: done });
   }
+  card.hand.addEventListener('click', e => {
+    const b = e.target.closest('.st-rot');
+    if (b) rotate(b.dataset.rot === 'tip' ? o => tipShown(hand.type, o) : o => turn(o));
+  });
   card.tray.addEventListener('click', e => { const b = e.target.closest('.st-mod'); if (b && !b.disabled) select(hand?.type === b.dataset.type ? null : b.dataset.type); });
 
   function fillState() {
@@ -440,8 +451,8 @@ function createPlay(item, lv, { free = false } = {}) {
 
   frame.title(free ? 'Workshop.' : TITLES[lv.task], item.name);
   frame.tools([
-    { id: 'turn', label: 'Turn', key: 'E', keys: ['Q'], legend: 'Turn the module (Q back)', run: e => rotate(o => turn(o, e?.key?.toLowerCase() === 'q' ? -1 : 1)) },
-    { id: 'tip', label: 'Tip', key: 'R', legend: 'Tip the module on its side', run: () => rotate(tip) },
+    { id: 'turn', label: 'Turn', key: 'E', keys: ['Q'], legend: 'Turn the module (Q back)', hidden: true, run: e => rotate(o => turn(o, e?.key?.toLowerCase() === 'q' ? -1 : 1)) },
+    { id: 'tip', label: 'Tip', key: 'R', legend: 'Tip the module on its side', hidden: true, run: () => rotate(o => tipShown(hand.type, o)) },
     { id: 'undo', label: 'Undo', key: 'Z', keys: ['Ctrl+Z'], run: undo },
     { id: 'down', label: 'Hand', key: 'X', legend: 'Put the module down, to lift one instead', hidden: true, run: putBack },
     ...(free ? [{ id: 'clear', label: 'Clear', key: 'C', run: () => { snapshot(); mods = []; hand = { type: order[0], o: 0 }; refresh(); } }]
@@ -563,5 +574,5 @@ const def = {
 
 const session = createSession({ def, frame, stage, redlines: red });
 session.start();
-window.__udp = { stage, session, turn, tip, get task() { return task; } };
+window.__udp = { stage, session, turn, tip, tipShown, get task() { return task; } };
 void THREE;

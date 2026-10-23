@@ -154,7 +154,18 @@ function cutTask(item, solid, { workshop = false } = {}) {
     laidFlat = false;
     if (marked) marked = new Set([...marked].filter(e => !cuts.includes(e)));
     refresh();
-    moveTo(prev, prevT, st, shownT);
+    moveTo(prev, prevT, st, shownT).then(() => { if (!busy) keepInView(); });
+  }
+
+  // after a cut opens or shuts the faces: refit only when the model leaves the free rect or shrinks far inside it
+  function keepInView() {
+    const r = stage.rect, pts = [];
+    for (const f of solid.faces) for (const q of view.facePoly(f.id)) pts.push(stage.project(q));
+    const xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    const out = x0 < r.x + 4 || y0 < r.y + 4 || x1 > r.x + r.w - 4 || y1 > r.y + r.h - 4;
+    const small = (x1 - x0) < r.w * .4 && (y1 - y0) < r.h * .4;
+    if (out || small) stage.frame(view.group, { padding: 48, duration: 600 });
   }
 
   function toggle(eid) {
@@ -273,7 +284,7 @@ function cutTask(item, solid, { workshop = false } = {}) {
   return {
     view,
     // for tests: cut an edge, or a good plan's cuts
-    cut: toggle, plan: () => findPlan()?.cuts,
+    cut: toggle, plan: () => findPlan()?.cuts, cuts: () => cuts.slice(),
     pick: ev => busy ? null : picker.edge(ev, view.edgeSegments(), { occluders: view.faces, px: 12 }),
     hover: t => { view.hoverEdge(t ? t.id : null); stage.invalidate(); },
     tap(ev) {
@@ -465,9 +476,11 @@ function whichTask(item, solid) {
   const xs = net.pose(0).flatMap(q => q.pts);
   const nx0 = Math.min(...xs.map(p => p[0])), nx1 = Math.max(...xs.map(p => p[0])), ny1 = Math.max(...xs.map(p => p[1]));
   const gap = 3.4, row = (keys.length - 1) * gap, cx = (nx0 + nx1) / 2;
+  // a tall screen (a phone held upright) gets them two by two: a row of four would be tiny
+  const tall = stage.rect.h > stage.rect.w * 1.2;
   const cands = solids.map((s, i) => {
     const lo = [0, 1].map(a => Math.min(...s.verts.map(v => v[a]))), hi = [0, 1].map(a => Math.max(...s.verts.map(v => v[a])));
-    const ox = cx - row / 2 + i * gap, oy = ny1 + 2.4;
+    const ox = tall ? cx + ((i % 2) - .5) * gap * 1.3 : cx - row / 2 + i * gap, oy = ny1 + 2.4 + (tall ? Math.floor(i / 2) * gap * 1.6 : 0);
     const placed = mapSolid(s, v => [ox + (v[0] - (lo[0] + hi[0]) / 2) * k, oy + (v[1] - (lo[1] + hi[1]) / 2) * k, v[2] * k]);
     const v = addView(placed);
     const tag = labels.add([ox, oy - 1.7, 0], String.fromCharCode(65 + i), { ink: true });

@@ -64,6 +64,17 @@ export const ROTS = (() => {
 const ROT_INDEX = new Map(ROTS.map((M, i) => [mkey(M), i]));
 export const turn = (o, s = 1) => { let M = ROTS[o]; for (let k = 0; k < ((s % 4) + 4) % 4; k++) M = mul(RZ, M); return ROT_INDEX.get(mkey(M)); };
 export const tip = o => ROT_INDEX.get(mkey(mul(RX, ROTS[o])));
+const RY = [[0, 0, 1], [0, 1, 0], [-1, 0, 0]];     // a quarter turn about y
+// tip that always shows: about x, else about y when tipping about x leaves the
+// shape as it was (a bar lying along x only rolls about its own length)
+export function tipShown(type, o) {
+  const now = shapeKey(oriented(type, o));
+  for (const R of [RX, RY]) {
+    const t = ROT_INDEX.get(mkey(mul(R, ROTS[o])));
+    if (shapeKey(oriented(type, t)) !== now) return t;
+  }
+  return tip(o);
+}
 
 // cells in the order the tiler fills them: by z, then y, then x
 const cmp = (a, b) => a[2] - b[2] || a[1] - b[1] || a[0] - b[0];

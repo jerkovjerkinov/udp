@@ -37,12 +37,15 @@ export const clock = s => {
  * createFrame({ game, name, stage, hubHref })
  *   game: id ('developments'), name: shown in the brand line, stage: from createStage
  */
+const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+const touchWords = t => touch ? t.replace(/,? or press [A-Z] to [A-Z]/g, '').replace(/\bClick\b/g, 'Tap').replace(/\bclick\b/g, 'tap').replace(/\bclicks\b/g, 'taps') : t;
+
 export function createFrame({ game, name, stage, hubHref = '../../index.html' }) {
   document.body.classList.add('udp-app-page');
   const root = h('div', 'udp-frame');
 
   const head = h('header', 'udp-head');
-  head.innerHTML = `<nav class="udp-brand"><a href="${hubHref}"><span class="udp-long">Unnamed Drawing Project</span><span class="udp-short" hidden>UDP</span></a><span class="udp-sep">·</span><a href="#map" data-act="map">${esc(name)}</a></nav>
+  head.innerHTML = `<nav class="udp-brand"><a href="${hubHref}"><span class="udp-long">Unnamed Drawing Project</span><span class="udp-short">← All games</span></a><span class="udp-sep">·</span><a href="#map" data-act="map">${esc(name)}</a></nav>
     <h1 class="udp-title"></h1><p class="udp-sub"></p><p class="udp-msg" aria-live="polite"></p>`;
   const elTitle = head.querySelector('.udp-title'), elSub = head.querySelector('.udp-sub'), elMsg = head.querySelector('.udp-msg');
 
@@ -88,7 +91,7 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
   function freeRect() {
     const W = window.innerWidth, H = window.innerHeight;
     // a phone on its side lays out in three columns (title, model, card), like a wide screen
-    const side = H <= 500 && W > H;
+    const side = H <= 500 && W > H && matchMedia('(pointer: coarse)').matches;
     const phone = W <= 820 && !side;
     const hb = head.getBoundingClientRect(), sb = stat.getBoundingClientRect(), bb = bar.getBoundingClientRect();
     const top = Math.max(hb.bottom, sb.bottom) + (phone ? 4 : 8);
@@ -199,7 +202,8 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
       layout();
     },
     // sub text: plain text, or HTML when html is true (use <em> for the signal colour)
-    sub(text, html = false) { elSub[html ? 'innerHTML' : 'textContent'] = text || ''; layout(); },
+    // on a touch screen the instructions say tap, not click
+    sub(text, html = false) { elSub[html ? 'innerHTML' : 'textContent'] = touchWords(text || ''); layout(); },
     // a short italic message under the sub text; kind 'k' prefix label; clears after ms
     say(text, { label = '', ms = 0 } = {}) {
       clearTimeout(msgTimer);

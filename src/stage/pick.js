@@ -63,6 +63,7 @@ export function createPicker(stage) {
   //         allowHidden (false) to fall back on a hidden edge when no visible one is near
   // -> { edge, id, dist (px), t (0..1 along a-b), point (Vector3), visible } | null
   function edge(ev, edges, { px = 10, occluders = null, allowHidden = false } = {}) {
+    if (ev.pointerType === 'touch') px = Math.max(px, 24);      // a fingertip, not a cursor
     const [mx, my] = local(ev);
     const cands = [];
     for (const e of edges) {

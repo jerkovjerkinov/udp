@@ -132,6 +132,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .udp-brand a { display: inline-flex; align-items: center; min-height: 24px; transition: color .2s var(--ease); }
 .udp-brand a:hover { color: var(--ink); }
 .udp-brand .udp-sep { color: var(--grey3); letter-spacing: 0; }
+.udp-brand .udp-short { display: none; }
 .udp-title { margin: 14px 0 0; font-size: 44px; font-weight: 300; letter-spacing: -.02em; line-height: 1.05; }
 .udp-title b { display: block; font-weight: 500; }
 .udp-sub { margin: 12px 0 0; max-width: 360px; font-size: 15px; line-height: 1.5; color: var(--grey1); }
@@ -414,6 +415,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   .udp-head { max-width: calc(100vw - 2 * var(--m) - 112px); }
   .udp-brand { font-size: 10px; letter-spacing: .24em; gap: 0 .6em; }
   .udp-brand .udp-long { display: none; }
+  .udp-brand .udp-short { display: inline; color: var(--ink); letter-spacing: .16em; }
+  .udp-brand a { min-height: 36px; }
   .udp-title { font-size: 28px; margin-top: 8px; }
   .udp-sub { font-size: 13.5px; line-height: 1.45; margin-top: 8px; }
   .udp-msg { font-size: 15px; }
@@ -477,6 +480,19 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .st-mod-name { font-family: var(--f-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
 .st-mod-name b { font-weight: 400; color: var(--grey3); margin-right: 2px; }
 .st-mod-n { font-family: var(--f-mono); font-size: 11px; color: var(--grey2); }
+.st-hand { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 8px 0; border-top: 1px solid var(--grey4); border-bottom: 1px solid var(--grey4); }
+.st-hand[hidden] { display: none; }
+.st-hand-icon { flex: 0 0 auto; min-width: 56px; display: flex; justify-content: center; }
+.st-hand-icon .st-icon { height: 44px; max-width: 72px; }
+.st-hand-btns { display: flex; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.st-rot { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; min-height: 44px; padding: 0 6px;
+  border: 1px solid var(--grey2); color: var(--ink); font-size: 13px; letter-spacing: .14em; text-transform: uppercase; transition: border-color .2s var(--ease), background .2s var(--ease); }
+.st-rot:hover:not([disabled]) { border-color: var(--ink); background: rgba(233, 230, 223, .06); }
+.st-rot:active:not([disabled]) { background: var(--signal-14); border-color: var(--signal); }
+.st-rot[disabled] { color: var(--grey3); border-color: var(--grey4); cursor: default; }
+.st-rot-i { font-size: 20px; line-height: 1; letter-spacing: 0; }
+.st-rot kbd { font-family: var(--f-mono); font-size: 10px; letter-spacing: 0; color: var(--grey2); border: 1px solid var(--grey4); padding: 0 4px; }
+@media (pointer: coarse) { .st-rot kbd { display: none; } }
 .st-rules { list-style: none; margin: 10px 0 0; padding: 0; font-family: var(--f-mono); font-size: 11px; letter-spacing: .04em; color: var(--grey1); }
 .st-rules li { display: flex; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--grey4); }
 .st-rules li i { font-style: normal; margin-left: auto; color: var(--grey2); white-space: nowrap; }
@@ -495,6 +511,16 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   .st-draw { margin-bottom: 4px; }
   .st-rules li.is-ok { display: none; }
   .st-why { max-width: 180px; }
+  /* the turn and tip buttons share the drawings' row: the model keeps its height */
+  .udp-card.is-tray .udp-card-body { display: flex; flex-wrap: wrap; align-items: flex-end; column-gap: 12px; }
+  .st-drawings { order: 1; }
+  .st-hand { order: 2; flex: 1 1 180px; margin: 0 0 6px; padding: 0; border: 0; }
+  .st-tray { order: 3; flex: 1 0 100%; }
+  .st-rules { order: 4; flex: 1 0 100%; display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
+  .st-rules li { gap: 6px; min-width: 0; }
+  .st-rules li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .st-hand-icon { display: none; }
+  .st-rot { min-height: 46px; }
 }
 .udp-label.st-why { white-space: normal; max-width: 260px; text-align: center; line-height: 1.35; }
 
@@ -503,11 +529,13 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 /* (after the phone block, so it wins on a narrow phone too)           */
 /* ------------------------------------------------------------------ */
 
-@media (max-height: 500px) and (orientation: landscape) {
+@media (max-height: 500px) and (orientation: landscape) and (pointer: coarse) {
   :root { --m: 20px; --mt: 10px; }
   .udp-head { max-width: 30vw; }
   .udp-brand { font-size: 9.5px; letter-spacing: .22em; gap: 0 .6em; }
   .udp-brand .udp-long { display: none; }
+  .udp-brand .udp-short { display: inline; color: var(--ink); letter-spacing: .16em; }
+  .udp-brand a { min-height: 36px; }
   .udp-title { font-size: 21px; margin-top: 6px; }
   .udp-sub { font-size: 12px; line-height: 1.4; margin-top: 6px; }
   .udp-msg { font-size: 13.5px; margin-top: 6px; }

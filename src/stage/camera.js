@@ -163,7 +163,8 @@ export function createCameraRig(host, options = {}) {
         if (!m.isMesh || m.userData.noFrame) return;
         const p = m.geometry.attributes.position;
         if (!p) return;
-        if (p.count > 4000) { tmpBox.setFromObject(m); pts.push(...corners(tmpBox)); return; }
+        // fat lines keep their points in instanceStart/End; `position` is only the unit quad
+        if (m.geometry.isLineSegmentsGeometry || p.count > 4000) { tmpBox.setFromObject(m); pts.push(...corners(tmpBox)); return; }
         for (let i = 0; i < p.count; i++) pts.push(new THREE.Vector3().fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld));
       });
       return pts;
@@ -180,26 +181,41 @@ export function createCameraRig(host, options = {}) {
   //   what: Box3 | Object3D | array of points ([x,y,z] or Vector3)
   //   opts: { animate = true, rect, padding = 28 px, yaw, pitch, duration = 900,
   //           maxScale = 220, pivot (Vector3: orbit centre, default the bounds' centre) }
-  function frame(what, opts = {}) {
-    const pts = pointsOf(what);
-    if (!pts.length) return Promise.resolve(false);
-    lastFrame = { what, opts };
-    const r = opts.rect || host.rect();
-    const pad = opts.padding ?? 28;
-    const yaw = opts.yaw ?? motion?.goalYaw ?? st.yaw, pitch = clampPitch(opts.pitch ?? st.pitch);
+  // the screen extent of points seen from (yaw, pitch), in world units
+  function extent(pts, yaw, pitch) {
     const f = dirOf(yaw, pitch).negate();
     const right = new THREE.Vector3().crossVectors(f, new THREE.Vector3(0, 0, 1)).normalize();
     const up = new THREE.Vector3().crossVectors(right, f);
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-    const box = new THREE.Box3();
     for (const p of pts) {
       const x = p.dot(right), y = p.dot(up);
       x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
-      box.expandByPoint(p);
     }
+    return { right, up, x0, x1, y0, y1 };
+  }
+  const fitOf = (e, r, pad) => Math.min((r.w - 2 * pad) / Math.max(1e-3, e.x1 - e.x0), (r.h - 2 * pad) / Math.max(1e-3, e.y1 - e.y0));
+
+  // opts.bestYaw: turn to the yaw step that shows the content largest (a tall phone
+  // screen wants a long model end-on); the current yaw wins unless another is clearly bigger
+  function frame(what, opts = {}) {
+    const pts = pointsOf(what);
+    if (!pts.length) return Promise.resolve(false);
+    lastFrame = { what, opts: opts.bestYaw ? { ...opts, bestYaw: false } : opts };
+    const r = opts.rect || host.rect();
+    const pad = opts.padding ?? 28;
+    let yaw = opts.yaw ?? motion?.goalYaw ?? st.yaw;
+    const pitch = clampPitch(opts.pitch ?? st.pitch);
+    if (opts.bestYaw && opts.yaw === undefined) {
+      let best = fitOf(extent(pts, yaw, pitch), r, pad) * 1.12;
+      for (let k = 0; k < Math.round(TAU / o.snap); k++) {
+        const y = stepOf(yaw) + k * o.snap, s = fitOf(extent(pts, y, pitch), r, pad);
+        if (s > best) { best = s; yaw = wrapPi(y); }
+      }
+    }
+    const { right, up, x0, x1, y0, y1 } = extent(pts, yaw, pitch);
+    const box = new THREE.Box3().setFromPoints(pts);
     const pivot = opts.pivot ? opts.pivot.clone() : box.getCenter(new THREE.Vector3());
-    const sw = Math.max(1e-3, x1 - x0), sh = Math.max(1e-3, y1 - y0);
-    let scale = Math.min((r.w - 2 * pad) / sw, (r.h - 2 * pad) / sh);
+    let scale = fitOf({ x0, x1, y0, y1 }, r, pad);
     scale = Math.max(4, Math.min(opts.maxScale ?? 220, scale));
     const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
     const cx = r.x + r.w / 2 + (pivot.dot(right) - mx) * scale;
