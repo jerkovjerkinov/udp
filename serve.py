@@ -7,6 +7,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map,
                       '.js': 'text/javascript', '.mjs': 'text/javascript', '.woff2': 'font/woff2', '.svg': 'image/svg+xml'}
 
+    # always ask the server again, so a new build shows on a plain refresh
+    def end_headers(self):
+        self.send_header('Cache-Control', 'no-cache')
+        super().end_headers()
+
 PORT = 8642
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dist')
 socketserver.TCPServer.allow_reuse_address = True

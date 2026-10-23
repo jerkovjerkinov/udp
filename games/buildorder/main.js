@@ -23,7 +23,7 @@ import { createLabels } from '../../src/stage/labels.js';
 import { createFrame } from '../../src/ui/frame.js';
 import { createRedlines } from '../../src/ui/redline.js';
 import { createSession } from '../../src/ui/session.js';
-import { wait, every, reducedMotion } from '../../src/fx/tween.js';
+import { wait, every } from '../../src/fx/tween.js';
 import { sfx } from '../../src/fx/sfx.js';
 import { buildModel, slideOut, slideIn, blocker, assemblyFrom, dismantleOrder, DIRS } from '../../src/core/tectonics.js';
 import { loadPhysics, runWorld } from '../../src/core/physics.js';
@@ -165,23 +165,27 @@ function standOff(p, d) {
 // The physics, played for the eye: the parts in `ids` start where they stand
 // and what falls, falls (under the lean it fell under). Then everything goes
 // back: each part to its offset in `back` (home when not given).
+// The fall is the answer the player asked for, so it plays with reduced motion too.
 async function collapse(v, m, ids, verdict, back = new Map()) {
   for (const id of verdict.falling) v.setState(id, 'error');
   sfx.crash();
-  if (!reducedMotion()) {
-    const run = runWorld(m, ids, { lean: verdict.lean });
-    await new Promise(done => {
-      let n = 0;
-      const stop = every(() => {
-        run.step(1);
-        n++;
-        for (const p of run.poses()) v.pose(p.id, p.c, p.q);
-        if (n >= 170 || (n > 45 && run.asleep())) { stop(); done(); }
-      });
+  const run = runWorld(m, ids, { lean: verdict.lean });
+  // in real time, 60 steps a second whatever the screen's rate (a slow
+  // machine takes at most 4 a frame and falls in slow motion instead)
+  await new Promise(done => {
+    let n = 0, t0 = null;
+    const stop = every(t => {
+      t0 ??= t;
+      const k = Math.min(4, Math.round((t - t0) * .06) - n + 1);
+      if (k < 1) return;
+      run.step(k);
+      n += k;
+      for (const p of run.poses()) v.pose(p.id, p.c, p.q);
+      if (n >= 170 || (n > 45 && run.asleep())) { stop(); done(); }
     });
-    run.free();
-    await wait(500, { essential: true });
-  }
+  });
+  run.free();
+  await wait(500, { essential: true });
   sfx.slide();
   await Promise.all(ids.map(id => v.settleTo(id, back.get(id) || [0, 0, 0], { duration: 800 })));
   for (const id of verdict.falling) v.setState(id, 'normal');

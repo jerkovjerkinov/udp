@@ -213,7 +213,7 @@ export function createCameraRig(host, options = {}) {
       changed();
       return Promise.resolve(true);
     }
-    return glide(to, { duration: opts.duration ?? 900, easing: ease.cubicInOut });
+    return glide(to, { duration: opts.duration ?? 900, easing: ease.cubicInOut, essential: !!opts.essential });
   }
 
   // re-fit the last framed content (on resize or a new free rect), without animation
@@ -224,12 +224,13 @@ export function createCameraRig(host, options = {}) {
   }
 
   // the end of a level: turn by n yaw steps and frame `what` in one glide, so
-  // the turn never leaves the framing half done
+  // the turn never leaves the framing half done (it shows the solved model from
+  // a new side, so it plays with reduced motion too)
   // (what = null: what was framed last, as it was framed)
   function frameTurn(what, n = -1, opts = {}) {
     const base = what ? { what, opts: {} } : lastFrame;
     if (!base) return Promise.resolve(false);
-    return frame(base.what, { ...base.opts, ...opts, animate: true, yaw: stepOf(motion?.goalYaw ?? st.yaw) - n * o.snap, duration: opts.duration ?? 1100 });
+    return frame(base.what, { ...base.opts, ...opts, animate: true, essential: true, yaw: stepOf(motion?.goalYaw ?? st.yaw) - n * o.snap, duration: opts.duration ?? 1100 });
   }
 
   // one slow orbit on success; any touch ends it early. Resolves when done.
