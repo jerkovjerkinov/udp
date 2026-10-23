@@ -7,6 +7,12 @@
 //   seen     a line wherever the surface you see changes: an edge, a crease, a
 //            step in depth, the outline against the sky
 //   hidden   an edge that is there but behind the surface you see (dashed)
+//   cut      in a section: the outline of the cut, where the plane runs through
+//            the plaster (the heaviest line, around the poché)
+//
+// A section (opts.cut = the depth of the plane along the view) takes away all
+// of the model in front of the plane. The same test then holds: the rays start
+// at the plane, and a ray that starts inside the plaster meets the cut itself.
 //
 // The test is the same for every line: look just to the left and just to the
 // right of it. If the two rays meet different surfaces, a seen line runs there.
@@ -32,6 +38,8 @@ export const VIEWS = {
   top: { short: 'Top', d: [0, 0, -1], u: [1, 0, 0], w: [0, 1, 0], name: 'Top view', seen: 'from above', yaw: -90, pitch: 89 },
 };
 
+// where two kinds land on the same step, the stronger line wins
+const RANK = { hidden: 0, seen: 1, cut: 2 };
 const near = (x, k = 1e-6) => Math.abs(x - Math.round(x)) < k;
 const gcd = (a, b) => b ? gcd(b, a % b) : a;
 const lerp2 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
@@ -117,8 +125,10 @@ function faceCrossing(F, G) {
  * }
  * Lattice coordinates are sheet units / STEP, with the model's own origin.
  */
-export function viewOf(solids, viewName, { hidden = true } = {}) {
+export function viewOf(solids, viewName, { hidden = true, cut = null } = {}) {
   const V = typeof viewName === 'string' ? VIEWS[viewName] : viewName;
+  const sec = cut !== null;
+  if (sec) hidden = false;
   const P = p => [dot(p, V.u) / STEP, dot(p, V.w) / STEP];
   const depthOf = p => dot(p, V.d);
 
@@ -135,9 +145,12 @@ export function viewOf(solids, viewName, { hidden = true } = {}) {
   const rayFaces = faces.filter(f => Math.abs(f.nd) > 1e-9);
   // the depth at which the ray through sheet point q meets face f's plane
   const tAt = (f, q) => (f.c - STEP * (q[0] * dot(f.n, V.u) + q[1] * dot(f.n, V.w))) / f.nd;
+  const CUT = { key: 'cut' };
+  const at3 = (q, t) => add(add(mul(V.u, q[0] * STEP), mul(V.w, q[1] * STEP)), mul(V.d, t));
   function firstHit(q) {
+    if (sec && inSolid(at3(q, cut + 1e-6))) return CUT;
     let best = null, bt = Infinity;
-    for (const f of rayFaces) if (inPoly(q, f.poly)) { const t = tAt(f, q); if (t < bt - 1e-9) { bt = t; best = f; } }
+    for (const f of rayFaces) if (inPoly(q, f.poly)) { const t = tAt(f, q); if (sec && t < cut - 1e-9) continue; if (t < bt - 1e-9) { bt = t; best = f; } }
     return best;
   }
   // is anything in front of depth t on the ray through sheet point q?
@@ -152,6 +165,10 @@ export function viewOf(solids, viewName, { hidden = true } = {}) {
     return { ...f, fl, flat: f.pts.map(fl), rn: dot(f.n, RAY) };
   }));
   function inModel(p) {
+    if (sec && dot(p, V.d) < cut) return false;
+    return inSolid(p);
+  }
+  function inSolid(p) {
     for (const fs of solidFaces) {
       let n = 0;
       for (const f of fs) {
@@ -188,6 +205,11 @@ export function viewOf(solids, viewName, { hidden = true } = {}) {
     if (faces[i].si === faces[j].si) continue;
     for (const [a3, b3] of faceCrossing(faces[i], faces[j])) cands.push({ a3, b3 });
   }
+  // a section: where the plane runs through each face is the outline of the cut
+  if (sec) {
+    const R = 1e3, plane = { n: V.d, c: cut, pts: [[-R, -R], [R, -R], [R, R], [-R, R]].map(([x, y]) => at3([x / STEP, y / STEP], cut)) };
+    for (const f of faces) if (Math.abs(Math.abs(f.nd) - 1) > 1e-9) for (const [a3, b3] of faceCrossing(f, plane)) cands.push({ a3, b3, onCut: true });
+  }
   for (const c of cands) { c.A = P(c.a3); c.B = P(c.b3); const d3 = sub(c.b3, c.a3); c.u3 = mul(d3, 1 / (len(d3) || 1)); }
   const live = cands.filter(c => Math.hypot(c.B[0] - c.A[0], c.B[1] - c.A[1]) > 1e-7);
 
@@ -218,7 +240,7 @@ export function viewOf(solids, viewName, { hidden = true } = {}) {
       const a = lerp2(c.A, c.B, run.t0), b = lerp2(c.A, c.B, run.t1);
       if (!(near(a[0]) && near(a[1]) && near(b[0]) && near(b[1]))) offLattice.push([a, b]);
       const ai = a.map(Math.round), bi = b.map(Math.round);
-      for (const k of stepsAny(ai, bi)) if (run.kind === 'seen' || !steps.has(k)) steps.set(k, run.kind);
+      for (const k of stepsAny(ai, bi)) if ((RANK[run.kind] ?? 0) >= (RANK[steps.get(k)] ?? -1)) steps.set(k, run.kind);
       lines3.push({ a: ai, b: bi, a3: lerp3(c.a3, c.b3, run.t0), b3: lerp3(c.a3, c.b3, run.t1), kind: run.kind });
       run = null;
     };
@@ -229,7 +251,7 @@ export function viewOf(solids, viewName, { hidden = true } = {}) {
       let kind = null;
       if (creaseAt(p3, c.u3)) {
         const s1 = firstHit([m[0] + nrm[0] * dl, m[1] + nrm[1] * dl]), s2 = firstHit([m[0] - nrm[0] * dl, m[1] - nrm[1] * dl]);
-        if ((s1?.key ?? null) !== (s2?.key ?? null)) kind = 'seen';
+        if ((s1?.key ?? null) !== (s2?.key ?? null)) kind = s1 === CUT || s2 === CUT ? 'cut' : 'seen';
         else if (hidden && covered(m, t)) kind = 'hidden';
       }
       if (run && run.kind === kind) { run.t1 = ts[i + 1]; continue; }

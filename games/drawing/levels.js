@@ -15,6 +15,9 @@
 //
 // hidden: true puts the second pen in the player's hand: edges you can't see
 // from this side are drawn too, dashed (pack D)
+// cut: n makes the view a section, cut on a plane n modules along the view's
+// axis (y for the front, x for the side): the cut outline in the heavy pen,
+// what lies beyond in the thin one (pack E)
 
 const L = (id, task, form, view, opts = {}) => ({ id, task, form, view, ...opts });
 
@@ -90,5 +93,23 @@ export const PACKS = [
     L('D7', 'error', 'tee-prism', 'front', { hidden: true, errors: 1, kinds: ['pen'], learn: 'The place was right but the pen was wrong. Solid means you can see it from here; dashed means it is there, out of sight.' }),
     // showpiece: the chimney, most of it hidden behind the roof
     L('D8', 'draw', 'chimney-house', 'front', { hidden: true, learn: 'Most of the chimney stands behind the front slope. The dashed lines show how far down it goes before it meets the roof.' }),
+  ] },
+  { id: 'E', name: 'Sections', brief: 'A section cuts the building on a plane and takes away the part in front, so you see inside its shape. The outline of the cut is the heaviest line on the sheet, and what lies beyond is drawn thin.', levels: [
+    // introduce: a gable house cut across; the cut is its profile, the ridge rises beyond
+    L('E1', 'complete', 'gable', 'right', { cut: 1.5, missing: 2, learn: 'The cut through the house is a heavy outline. Beyond it the roof keeps rising to the ridge, and that is a thin line.' }),
+    // the hipped roof cut near its end
+    L('E2', 'draw', 'hip-roof', 'front', { cut: .5, learn: 'Cut near the end, the hipped roof is low. The rest of the roof rises behind the cut, drawn thin.' }),
+    // develop: cut through the wing, the house beyond
+    L('E3', 'draw', 'cross-house', 'front', { cut: .5, learn: 'The plane cut only the wing. The main house stands behind it, uncut, so all of its lines are thin.' }),
+    // develop: cut further in, through both parts
+    L('E4', 'draw', 'ell-house', 'front', { cut: 1.5, learn: 'Further in, the plane runs through both wings, and their cuts join into one outline.' }),
+    // twist: the tower is cut, the chapel stands beyond
+    L('E5', 'complete', 'chapel', 'front', { cut: .5, missing: 3, learn: 'The cut ran through the tower and its spire. The chapel behind it is seen, not cut.' }),
+    // twist, harder: a stepped house, cut at its front
+    L('E6', 'draw', 'step-house', 'front', { cut: .5, learn: 'Each step of the house is either cut or seen beyond. The section sorts them for you.' }),
+    // breather: one line in the wrong pen
+    L('E7', 'error', 'tee-house', 'front', { cut: 1, errors: 1, kinds: ['pen'], learn: 'A cut line drawn thin, or a line beyond drawn heavy, tells the wrong story about where the plane ran.' }),
+    // showpiece: the tower house cut through
+    L('E8', 'draw', 'tower-house', 'front', { cut: .5, learn: 'The plane ran through the house and its tower together. One heavy outline holds both, and the roofs rise beyond.' }),
   ] },
 ];

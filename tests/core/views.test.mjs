@@ -1,7 +1,7 @@
 // node tests/core/views.test.mjs — Drawing Set: views, drawings and levels
 import { viewOf, stepsAny } from '../../src/core/views.js';
 import { DRAW_FORMS, drawForm } from '../../src/core/drawforms.js';
-import { compareDrawing, mistake, levelSheet, answerSteps, hiddenForComplete, signature } from '../../src/core/drawtasks.js';
+import { compareDrawing, mistake, levelSheet, answerSteps, hiddenForComplete, signature, pocheOf } from '../../src/core/drawtasks.js';
 import { FORMS } from '../../src/core/forms.js';
 import { seededRng } from '../../src/core/rand.js';
 import { PACKS } from '../../games/drawing/levels.js';
@@ -36,6 +36,14 @@ const tower = viewOf(drawForm('tower-house'), 'front');
 ok(!stepsAny([8, 0], [8, 2]).some(k => tower.steps.has(k)), 'tower house: no line where the walls are flush');
 const ch = viewOf(drawForm('chimney-house'), 'front');
 ok(has(ch, [5, 3], [6, 3], 'hidden'), 'chimney: where it meets the back slope is hidden from the front');
+
+// sections: a gable cut across is its profile, all cut; cut through the wing of
+// a cross gable, the main house beyond is seen, not cut
+const gs = viewOf(gable, 'front', { cut: 1.5 });
+ok(gs.lines.length === 5 && gs.lines.every(l => l.kind === 'cut'), 'gable section: the whole profile is cut');
+const cw = viewOf(cross, 'front', { cut: .5 });
+ok(has(cw, [2, 0], [2, 2], 'cut') && has(cw, [0, 4], [8, 4]), 'cross gable section: the wing is cut, the main ridge beyond is seen');
+ok(JSON.stringify(pocheOf(viewOf([FORMS['u-prism'].make()], 'front', { cut: 2 }).steps).map(p => p.length)) === '[4,4]', 'U block cut through its arms: two pochés');
 
 // every building has a closed set of views on the lattice
 for (const [key, f] of Object.entries(DRAW_FORMS)) {
@@ -75,6 +83,10 @@ for (const pk of PACKS) {
     const t = sh.views[l.view];
     const hid = { hidden: !!l.hidden };
     if (l.hidden) ok(t.raw.lines.some(x => x.kind === 'hidden'), l.id + ': a hidden-line sheet has a hidden line to draw');
+    if (l.cut !== undefined) {
+      ok(t.raw.lines.some(x => x.kind === 'cut') && t.raw.lines.some(x => x.kind === 'seen'), l.id + ': a section has a cut and something beyond');
+      ok(pocheOf(t.steps).length >= 1, l.id + ': the cut closes into a poché');
+    }
     if (l.task === 'complete') {
       const gone = hiddenForComplete(t, seededRng('complete:' + l.id + ':'), l.missing, hid);
       ok(gone.length === l.missing, l.id + ': lines to complete');

@@ -7,7 +7,7 @@
 // they were drawn with.
 
 import { mergeSteps, parseStep, stepKey } from './lattice.js';
-import { viewOf, shiftSteps, stepsAny } from './views.js';
+import { VIEWS, viewOf, shiftSteps, stepsAny } from './views.js';
 import { drawForm } from './drawforms.js';
 import { shuffle, randInt } from './rand.js';
 
@@ -32,7 +32,7 @@ const onBox = (l, b) => (l.a[0] === l.b[0] && (l.a[0] === b.x0 || l.a[0] === b.x
 // the lines a 'complete' level hides: inner lines first, the outline last;
 // on a hidden-line sheet the dashed lines go first, since they are the lesson
 export function hiddenForComplete(view, rng, n, { hidden = false } = {}) {
-  const seen = view.lines.filter(l => l.kind === 'seen');
+  const seen = view.lines.filter(l => l.kind === 'seen' || l.kind === 'cut');
   const inner = shuffle(rng, seen.filter(l => !onBox(l, view.box))), outer = shuffle(rng, seen.filter(l => onBox(l, view.box)));
   const dashed = hidden ? shuffle(rng, view.lines.filter(l => l.kind === 'hidden')) : [];
   return [...dashed, ...inner, ...outer].slice(0, Math.min(n, seen.length - 1 + dashed.length));
@@ -45,21 +45,25 @@ export function hiddenForComplete(view, rng, n, { hidden = false } = {}) {
 //   pen      on a hidden-line sheet: a hidden edge drawn solid, or a seen one dashed
 // Returns { steps, wrong: [{ a, b, kind, why }] } or null.
 export function mistake(view, rng, { kinds = ['back', 'shift'], n = 1, hidden = false } = {}) {
-  const steps = new Map([...view.steps].filter(([, v]) => hidden || v === 'seen'));
+  const steps = new Map([...view.steps].filter(([, v]) => hidden || v !== 'hidden'));
   const wrong = [];
-  const seen = view.lines.filter(l => hidden || l.kind === 'seen');
-  const pens = shuffle(rng, [...view.lines.filter(l => l.kind === 'hidden'), ...view.lines.filter(l => l.kind === 'seen' && !onBox(l, view.box))]);
+  const seen = view.lines.filter(l => hidden || l.kind !== 'hidden');
+  // a section's two pens are cut and seen; otherwise seen and hidden
+  const section = view.lines.some(l => l.kind === 'cut');
+  const other = section ? 'cut' : 'hidden';
+  const pens = shuffle(rng, [...view.lines.filter(l => l.kind === other), ...view.lines.filter(l => l.kind === 'seen' && !onBox(l, view.box))]);
   const backs = shuffle(rng, view.lines.filter(l => l.kind === 'hidden'));
   const b = view.box;
   const inBox = p => p[0] >= b.x0 && p[0] <= b.x1 && p[1] >= b.y0 && p[1] <= b.y1;
   for (let t = 0; t < 60 && wrong.length < n; t++) {
     const kind = kinds[randInt(rng, kinds.length)];
-    if (kind === 'pen' && hidden && pens.length) {
+    if (kind === 'pen' && (hidden || section) && pens.length) {
       const l = pens.shift();
       if (wrong.some(w => w.from === l || w.steps.some(k => l.steps.includes(k)))) continue;
-      const to = l.kind === 'hidden' ? 'seen' : 'hidden';
+      const to = l.kind === other ? 'seen' : other;
       for (const k of l.steps) steps.set(k, to);
-      wrong.push({ a: l.a, b: l.b, why: to === 'seen' ? 'solid' : 'dashed', steps: l.steps, kind: to });
+      const why = section ? (to === 'seen' ? 'thin' : 'heavy') : (to === 'seen' ? 'solid' : 'dashed');
+      wrong.push({ a: l.a, b: l.b, why, steps: l.steps, kind: to });
     } else if (kind === 'back' && backs.length && !hidden) {
       const l = backs.pop();
       const ks = stepsAny(l.a, l.b).filter(k => !steps.has(k));
@@ -96,8 +100,9 @@ export const signature = steps => [...steps].map(([k, v]) => k + v).sort().join(
 //   front at the origin, the right side to its right, the top view above it:
 //   the box of views unfolded, so heights line up across and widths up and down
 export const GAP = 2;
-export function layout(solids, views) {
-  const vs = Object.fromEntries(views.map(v => [v, viewOf(solids, v)]));
+// cut: { view, at } makes that view a section, cut at depth at along it
+export function layout(solids, views, { cut = null } = {}) {
+  const vs = Object.fromEntries(views.map(v => [v, viewOf(solids, v, cut && cut.view === v ? { cut: cut.at } : {})]));
   const w = v => vs[v] ? vs[v].box.x1 - vs[v].box.x0 : 0, h = v => vs[v] ? vs[v].box.y1 - vs[v].box.y0 : 0;
   const place = {};
   if (vs.front) place.front = [0, 0];
@@ -131,12 +136,55 @@ export function sheetViews(item) {
 
 export function levelSheet(item) {
   const solids = drawForm(item.form);
-  return { solids, ...layout(solids, sheetViews(item)) };
+  // item.cut is where the plane stands, in modules along the view's axis
+  const d = VIEWS[item.view].d, at = item.cut * (d[0] + d[1] + d[2]);
+  return { solids, ...layout(solids, sheetViews(item), { cut: item.cut !== undefined ? { view: item.view, at } : null }) };
 }
 
-// keep only the steps of one kind ('seen' unless a level draws hidden lines too)
+// the steps a drawing should have: seen and cut lines, and hidden ones when a
+// level draws those too
 export function answerSteps(v, { hidden = false } = {}) {
-  return new Map([...v.steps].filter(([, k]) => hidden || k === 'seen'));
+  return new Map([...v.steps].filter(([, k]) => hidden || k !== 'hidden'));
 }
 
 export { parseStep, stepKey };
+
+// The poché of a section: the cut lines walked into closed outlines, as
+// polygons on the sheet (lattice points). Outlines that don't close are left out.
+export function pocheOf(steps) {
+  const adj = new Map(), key = p => p[0] + ',' + p[1];
+  const link = (p, q) => { const k = key(p); if (!adj.has(k)) adj.set(k, { p, to: [] }); adj.get(k).to.push(q); };
+  // walk unit steps, so a branch from the middle of a long line is still found
+  const lines = [...steps].filter(([, k]) => k === 'cut').map(([k]) => { const [a, b] = parseStep(k); return { a, b }; });
+  for (const l of lines) { link(l.a, l.b); link(l.b, l.a); }
+  const used = new Set(), polys = [];
+  const ek = (p, q) => key(p) + '>' + key(q);
+  for (const l of lines) {
+    if (used.has(ek(l.a, l.b)) || used.has(ek(l.b, l.a))) continue;
+    const poly = [l.a];
+    let prev = l.a, cur = l.b;
+    used.add(ek(l.a, l.b));
+    for (let n = 0; n < 200 && key(cur) !== key(l.a); n++) {
+      poly.push(cur);
+      const node = adj.get(key(cur));
+      // turn the sharpest way at a crossing, so each outline stays simple
+      const din = [cur[0] - prev[0], cur[1] - prev[1]];
+      const next = node.to.filter(q => !used.has(ek(cur, q)) && !used.has(ek(q, cur)) && key(q) !== key(prev))
+        .sort((q1, q2) => turn(din, [q1[0] - cur[0], q1[1] - cur[1]]) - turn(din, [q2[0] - cur[0], q2[1] - cur[1]]))[0];
+      if (!next) break;
+      used.add(ek(cur, next));
+      prev = cur; cur = next;
+    }
+    if (key(cur) === key(l.a) && poly.length >= 3) polys.push(simplify(poly));
+  }
+  return polys;
+}
+// drop the points in the middle of straight runs
+function simplify(poly) {
+  const n = poly.length;
+  return poly.filter((p, i) => {
+    const a = poly[(i + n - 1) % n], b = poly[(i + 1) % n];
+    return (p[0] - a[0]) * (b[1] - p[1]) - (p[1] - a[1]) * (b[0] - p[0]) !== 0;
+  });
+}
+const turn = (a, b) => Math.atan2(a[0] * b[1] - a[1] * b[0], a[0] * b[0] + a[1] * b[1]);

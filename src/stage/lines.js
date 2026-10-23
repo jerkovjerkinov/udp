@@ -33,6 +33,8 @@ export const DRAFT = {
   mountain:   { width: 1, dash: [10, 3, 1.5, 3], tone: 'soft' },
   hidden:     { width: .8, dash: [3, 3], tone: 'faint' },
   hiddenPen:  { width: 1.6, dash: [5, 4], tone: 'strong' },
+  cutPen:     { width: 4.2, tone: 'strong' },
+  cutGiven:   { width: 3.4, tone: 'line' },
   guide:      { width: .75, tone: 'guide' },
   signal:     { width: 3, tone: 'signal' },
   signalFold: { width: 1.6, dash: [6, 4], tone: 'signal' },

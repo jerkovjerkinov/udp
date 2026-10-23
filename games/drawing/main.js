@@ -27,7 +27,8 @@ import { sfx } from '../../src/fx/sfx.js';
 import { mergeSteps } from '../../src/core/lattice.js';
 import { VIEWS, STEP, viewOf, stepsAny } from '../../src/core/views.js';
 import { DRAW_FORMS, drawForm } from '../../src/core/drawforms.js';
-import { compareDrawing, hiddenForComplete, mistake, signature, levelSheet, layout, answerSteps } from '../../src/core/drawtasks.js';
+import { compareDrawing, hiddenForComplete, mistake, signature, levelSheet, layout, answerSteps, pocheOf } from '../../src/core/drawtasks.js';
+import { triangulate } from '../../src/core/poly.js';
 import { seededRng, pick, shuffle } from '../../src/core/rand.js';
 import { PACKS } from './levels.js';
 
@@ -45,6 +46,14 @@ const TITLES = {
   complete: 'Can you finish the drawing?', draw: 'Can you draw this view?', error: 'Can you spot the mistakes?',
   which: 'Which drawing is right?', third: 'Can you draw the third view?',
 };
+// how each kind of line looks on the sheet: given (grey) and drawn by the player
+const GIVEN_STYLE = { seen: 'visible', hidden: 'fold', cut: 'cutGiven' };
+const DRAWN_STYLE = { seen: 'profile', hidden: 'hiddenPen', cut: 'cutPen' };
+const PEN_LABEL = { seen: 'Pen: thin', hidden: 'Pen: dashed', cut: 'Pen: cut' };
+const POCHE = 'rgba(233, 230, 223, .2)';
+// the depth of a section's plane along its view: levels name it in modules,
+// across the building from the side the view looks from
+const cutDepth = item => item.cut * (VIEWS[item.view].d[0] + VIEWS[item.view].d[1] + VIEWS[item.view].d[2]);
 const TASK_TAGS = { complete: 'finish', draw: 'draw', error: 'spot the error', which: 'which view', third: 'third view' };
 const VIEW_TAGS = { front: 'front', back: 'back', right: 'side', left: 'side', top: 'top' };
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -160,12 +169,14 @@ function addModel(solids, view, { hidden = false } = {}) {
 // drawing lands line by line as it is drawn. It is the glass box every drafting
 // course starts from: the view is what the building leaves on the glass.
 // v is the view as laid out on the sheet (its off maps sheet points back).
-function addGlass(m, solids, view, v) {
+// A section's glass stands at the cut itself (depth: the cut along the view),
+// its rim in the signal colour: it is the plane the building is cut on.
+function addGlass(m, solids, view, v, { depth = null } = {}) {
   const V = VIEWS[view];
   const U = new THREE.Vector3(...V.u), Wv = new THREE.Vector3(...V.w), Dv = new THREE.Vector3(...V.d);
   let t0 = Infinity;
   for (const s of solids) for (const p of s.verts) t0 = Math.min(t0, p[0] * V.d[0] + p[1] * V.d[1] + p[2] * V.d[2]);
-  t0 -= .3;
+  t0 = depth !== null ? depth - .004 : t0 - .3;
   const at = ([x, y]) => U.clone().multiplyScalar((x - v.off[0]) * STEP).addScaledVector(Wv, (y - v.off[1]) * STEP).addScaledVector(Dv, t0).toArray();
   const b = grow(v.box, .6);
   const c = [[b.x0, b.y0], [b.x1, b.y0], [b.x1, b.y1], [b.x0, b.y1]].map(at);
@@ -174,21 +185,46 @@ function addGlass(m, solids, view, v) {
   const mat = new THREE.MeshBasicMaterial({ color: '#e9e6df', transparent: true, opacity: .07, side: THREE.DoubleSide, depthWrite: false });
   const pane = new THREE.Mesh(geo, mat);
   pane.renderOrder = 3;
-  const rim = createLines(c.map((p, i) => [p, c[(i + 1) % 4]]), 'fold', { on: 'sheet', renderOrder: 4 });
+  const rim = createLines(c.map((p, i) => [p, c[(i + 1) % 4]]), depth !== null ? 'signalFold' : 'fold', { on: 'sheet', renderOrder: 4 });
   const seen = createLines([], 'profile', { on: 'sheet', renderOrder: 6 });
   const hidden = createLines([], 'hiddenPen', { on: 'sheet', renderOrder: 6 });
+  const cut = createLines([], 'cutPen', { on: 'sheet', renderOrder: 6 });
   const glass = new THREE.Group();
-  glass.add(pane, rim, seen, hidden);
+  glass.add(pane, rim, seen, hidden, cut);
   m.group.add(glass);
+  let cap = null;
   return {
+    at,
     // lines on the sheet: [{ a, b, kind }]
     draw(lines) {
-      seen.setSegments(lines.filter(l => l.kind !== 'hidden').map(l => [at(l.a), at(l.b)]));
+      seen.setSegments(lines.filter(l => l.kind === 'seen').map(l => [at(l.a), at(l.b)]));
       hidden.setSegments(lines.filter(l => l.kind === 'hidden').map(l => [at(l.a), at(l.b)]));
+      cut.setSegments(lines.filter(l => l.kind === 'cut').map(l => [at(l.a), at(l.b)]));
+      stage.invalidate();
+    },
+    // a section solved: everything in front of the cut goes, and the cut
+    // faces (the poché, polys on the sheet) close it in the signal colour
+    open(polys) {
+      const plane = new THREE.Plane(Dv.clone(), -(t0 + .004));
+      stage.renderer.localClippingEnabled = true;
+      m.group.traverse(o => { if (o.material && o !== pane && !glass.children.includes(o)) { o.material.clippingPlanes = [plane]; o.material.clipShadows = true; o.material.needsUpdate = true; } });
+      const pos = [], idx = [];
+      for (const poly of polys) {
+        const base = pos.length / 3;
+        for (const q of poly) pos.push(...at(q));
+        for (const t of triangulate(poly)) idx.push(...t.map(i => base + i));
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setIndex(idx);
+      cap = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: '#ff5a1f', side: THREE.DoubleSide }));
+      cap.renderOrder = 2;
+      pane.visible = false;
+      glass.add(cap);
       stage.invalidate();
     },
     set visible(on) { glass.visible = on; stage.invalidate(); },
-    dispose() { geo.dispose(); mat.dispose(); rim.dispose(); seen.dispose(); hidden.dispose(); glass.removeFromParent(); },
+    dispose() { geo.dispose(); mat.dispose(); rim.dispose(); seen.dispose(); hidden.dispose(); cut.dispose(); cap?.geometry.dispose(); cap?.material.dispose(); glass.removeFromParent(); },
   };
 }
 
@@ -235,12 +271,14 @@ function drawingTask(item) {
   const sheet = levelSheet(item);
   const target = sheet.views[item.view];
   const hid = { hidden: !!item.hidden };
+  // a section: the model cut on a plane at depth item.cut, drawn with the cut pen and the seen pen
+  const section = item.cut !== undefined;
   const answer = answerSteps(target, hid);
   const model = addModel(sheet.solids, item.view, { hidden: third });
-  const glass = addGlass(model, sheet.solids, item.view, target);
+  const glass = addGlass(model, sheet.solids, item.view, target, { depth: section ? cutDepth(item) : null });
   const region = third ? target.box : grow(target.box, 1);
 
-  const board = openCard(third ? 'Sheet' : viewName(item.view), third ? `draw the ${lower(viewName(item.view))}` : VIEWS[item.view].seen, { interactive: true });
+  const board = openCard(third ? 'Sheet' : section ? 'Section' : viewName(item.view), third ? `draw the ${lower(viewName(item.view))}` : section ? 'cut on the orange plane' : VIEWS[item.view].seen, { interactive: true });
   board.setGrid('dots', grow(sheet.bounds, third ? 0 : 1));
 
   // the lines a level gives: most of the view (complete), or two other views (third)
@@ -262,20 +300,25 @@ function drawingTask(item) {
     // the sheet fits the region with room for its label
     board.polygon([[region.x0, region.y0], [region.x1, region.y0], [region.x1, region.y1], [region.x0, region.y1]], { id: 'frame', fill: 'none', stroke: null, hit: false });
   }
-  mergeSteps(given).forEach((l, i) => board.line(l.a, l.b, l.kind === 'hidden' ? 'fold' : 'visible', { id: 'gc' + i, hit: false }));
+  mergeSteps(given).forEach((l, i) => board.line(l.a, l.b, GIVEN_STYLE[l.kind], { id: 'gc' + i, hit: false }));
   board.fit();
 
-  // the pen: 'seen' (solid) or, on a hidden-line sheet, 'hidden' (dashed)
-  let pen = 'seen';
+  // the pen: 'seen' (solid) and, on a hidden-line sheet, 'hidden' (dashed);
+  // a section starts with the cut pen, since a drafter draws the cut first
+  const pens = section ? ['cut', 'seen'] : item.hidden ? ['seen', 'hidden'] : ['seen'];
+  let pen = pens[0];
+  const penLabel = k => k === 'seen' && !section ? 'Pen: solid' : PEN_LABEL[k];
   let drawn = new Map();
   const history = [];
   let guides = 0;
   const all = () => new Map([...given, ...drawn]);
 
   function render() {
-    for (const it of board.items()) if (/^d\d/.test(String(it.id))) board.remove(it.id);
+    for (const it of board.items()) if (/^(d|pc)\d/.test(String(it.id))) board.remove(it.id);
     const lines = mergeSteps(drawn);
-    lines.forEach((l, i) => board.line(l.a, l.b, l.kind === 'hidden' ? 'hiddenPen' : 'profile', { id: 'd' + i, line: l }));
+    // a closed cut outline fills in as soon as it closes: the poché
+    if (section) pocheOf(all()).forEach((poly, i) => board.polygon(poly, { id: 'pc' + i, fill: POCHE, stroke: null, hit: false, noFit: true }));
+    lines.forEach((l, i) => board.line(l.a, l.b, DRAWN_STYLE[l.kind], { id: 'd' + i, line: l }));
     glass.draw([...mergeSteps(given), ...lines]);
     const n = lines.length;
     // how to draw, on the first sheets only
@@ -284,15 +327,18 @@ function drawingTask(item) {
       ? `Most of this ${lower(viewName(item.view))} is drawn, but ${plural(item.missing || 2, 'line')} ${item.missing === 1 ? 'is' : 'are'} missing. Look at the model ${VIEWS[item.view].seen}, where the arrow points, and add ${item.missing === 1 ? 'it' : 'them'}. ${how}`
       : third
         ? `The model is hidden. From its ${item.given.map(g => lower(viewName(g))).join(' and ')}, work out its shape and draw the ${lower(viewName(item.view))}.${/^C[12]$/.test(item.id) ? ' The Guides button draws a drafter’s projection lines.' : ''} ${how}`
+        : section
+          ? `This is a section: the building cut on the orange plane, seen the way the arrow points, with the part in front taken away. Draw the outline of the cut with the heavy cut pen, then what you see beyond it with the thin pen. The Pen button switches.`
         : item.hidden
           ? `Draw the building ${VIEWS[item.view].seen}, where the arrow points. Edges you can see are solid; edges that are there but out of sight are dashed: switch pens with the Pen button.`
           : `Draw the building ${VIEWS[item.view].seen}, where the arrow points: every edge you can see, and nothing you can’t. ${how}`;
     if (item.hidden && item.task === 'complete') text += ' Use the Pen button for a dashed line.';
+    if (section && item.task === 'complete') text = `Most of this section is drawn: the building cut on the orange plane, seen the way the arrow points. The heavy lines are the cut, the thin ones what lies beyond. Add the ${plural(item.missing || 2, 'line')} that ${item.missing === 1 ? 'is' : 'are'} missing; the Pen button switches between cut and thin.`;
     text = text.trim();
     frame.sub(`${text}<span class="udp-count">${plural(n, 'line')} drawn</span>`, true);
     frame.primary({ label: 'Check', run: () => session.check(), disabled: !drawn.size, ready: false });
     frame.tool('undo', { off: !history.length });
-    frame.tool('pen', { label: pen === 'hidden' ? 'Pen: dashed' : 'Pen: solid', active: pen === 'hidden' });
+    frame.tool('pen', { label: penLabel(pen), active: pen !== pens[0] });
     stage.invalidate();
   }
 
@@ -363,7 +409,7 @@ function drawingTask(item) {
   function clearGuides() { for (let i = 0; i < guides; i++) board.remove('g' + i); guides = 0; }
   function showGuides(lines) {
     clearGuides();
-    lines.forEach((l, i) => board.line(l.a, l.b, item.hidden && l.kind === 'hidden' ? 'signalFold' : 'signalThin', { id: 'g' + i, hit: false }));
+    lines.forEach((l, i) => board.line(l.a, l.b, l.kind === 'hidden' ? 'signalFold' : l.kind === 'cut' ? 'signal' : 'signalThin', { id: 'g' + i, hit: false }));
     guides = lines.length;
   }
 
@@ -379,7 +425,7 @@ function drawingTask(item) {
   frame.tools([
     { id: 'undo', label: 'Undo', key: 'Z', keys: ['Ctrl+Z'], run: undo },
     { id: 'reset', label: 'Clear', key: 'R', run: () => { if (drawn.size) { history.push({ del: [...drawn.keys()], was: [...drawn.values()] }); drawn = new Map(); sfx.slide(); render(); } } },
-    ...(item.hidden ? [{ id: 'pen', label: 'Pen: solid', key: 'P', title: 'Switch between the solid and the dashed pen', run: () => { pen = pen === 'seen' ? 'hidden' : 'seen'; sfx.tick(); render(); } }] : []),
+    ...(pens.length > 1 ? [{ id: 'pen', label: penLabel(pen), key: 'P', title: 'Switch pens', run: () => { pen = pens[(pens.indexOf(pen) + 1) % pens.length]; sfx.tick(); render(); } }] : []),
     ...(third ? [{ id: 'guides', label: 'Guides', key: 'G', title: 'Projection lines from the two views', run: () => showProjectors(!projOn) }] : [{ id: 'look', label: 'Look', key: 'L', run: () => look(item.view) }]),
     { id: 'hint', label: 'Hint', key: 'H', run: () => session.hint() },
   ]);
@@ -415,6 +461,7 @@ function drawingTask(item) {
     },
     hint(n) {
       if (n === 1) {
+        if (section) return { text: 'Imagine slicing the model along the orange plane and lifting the front part away. Wherever the knife went through plaster, the outline of the cut is a heavy line. Everything you see behind the cut is a thin line.' };
         if (item.hidden) return { text: `First draw everything you can see ${VIEWS[item.view].seen}. Then turn the model and look for edges behind walls or round corners: each of them is a dashed line, at the place it would be if the walls were glass.` };
         if (third) {
           if (!projOn) showProjectors(true);
@@ -442,8 +489,9 @@ function drawingTask(item) {
     async solved() {
       clearGuides();
       for (const it of board.items()) if (/^(d\d|gc)/.test(String(it.id))) board.remove(it.id);
-      mergeSteps(answer).forEach((l, i) => board.line(l.a, l.b, l.kind === 'hidden' ? 'hiddenPen' : 'profile', { id: 'ok' + i, hit: false }));
+      mergeSteps(answer).forEach((l, i) => board.line(l.a, l.b, DRAWN_STYLE[l.kind], { id: 'ok' + i, hit: false }));
       glass.draw(mergeSteps(answer));
+      if (section) glass.open(pocheOf(answer).map(poly => poly.map(q => q)));
       if (third) { frameModel(model); await cast(model); }
       await finale(model, raw.lines.filter(l => item.hidden || l.kind === 'seen').flatMap(l => l.parts3), item.view);
     },
@@ -468,14 +516,14 @@ function errorTask(item) {
   const board = openCard(viewName(item.view), plural(n, 'mistake'));
   board.setGrid('dots', grow(target.box, 1));
   const right = new Map([...m.steps].filter(([k]) => !wrongSteps.has(k)));
-  const pen = k => k === 'hidden' ? 'fold' : 'visible';
+  const pen = k => GIVEN_STYLE[k];
   mergeSteps(right).forEach((l, i) => board.line(l.a, l.b, pen(l.kind), { id: 'r' + i, line: l }));
   m.wrong.forEach((w, i) => board.line(w.a, w.b, pen(w.kind), { id: 'w' + i, wrong: i }));
   const box = grow(target.box, 1);
   board.polygon([[box.x0, box.y0], [box.x1, box.y0], [box.x1, box.y1], [box.x0, box.y1]], { id: 'frame', fill: 'none', stroke: null, hit: false });
   board.fit();
   const found = new Set();
-  const WHY = { back: 'round the back', shift: 'out of place', solid: 'should be dashed', dashed: 'should be solid' };
+  const WHY = { back: 'round the back', shift: 'out of place', solid: 'should be dashed', dashed: 'should be solid', thin: 'cut: should be heavy', heavy: 'beyond: should be thin' };
 
   function sub() {
     if (item.hidden) return frame.sub(`Someone drew this ${lower(viewName(item.view))} with both pens and made <em>${n === 1 ? 'one mistake' : `${n} mistakes`}</em>: a line in the right place but in the wrong pen. Solid is for edges you can see, dashed for edges out of sight. Tap what is wrong.<span class="udp-count"><em>${found.size}</em> / ${n} found</span>`, true);
