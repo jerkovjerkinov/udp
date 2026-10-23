@@ -191,6 +191,19 @@ export function canPlace(m, present, id) {
   return wayOut(m, present, p);
 }
 
+// the geometry alone: is there a clear way out for part id (or, going in, a
+// clear way in)? What stays standing is the physics' to say (physics.js)
+export function slideOut(m, present, id) {
+  const rest = new Set(present);
+  rest.delete(id);
+  return wayOut(m, rest, m.byId.get(id));
+}
+export function slideIn(m, present, id) {
+  const rest = new Set(present);
+  rest.delete(id);
+  return wayOut(m, rest, m.byId.get(id));
+}
+
 // every part that could come out now
 export const removable = (m, present) => [...present].filter(id => canRemove(m, present, id).ok);
 
@@ -201,7 +214,12 @@ export const removable = (m, present) => [...present].filter(id => canRemove(m, 
 // A way to build from `present` to the goal (every lasting part in, no temporary
 // works left): [{ op: 'in' | 'out', id, dir }] or null. Depth-first with a
 // memo; lasting parts first, temporary works only when nothing else goes.
-export function assemblyFrom(m, present = new Set(), { limit = 40000 } = {}) {
+//
+// `stable(set)`, when given, is the physics' word on whether a set of parts
+// stands (physics.js stableOracle); a move that would leave a set that falls is
+// not taken.
+// `temps` caps how many temporary works may stand on the site at once.
+export function assemblyFrom(m, present = new Set(), { limit = 40000, stable = null, temps = Infinity } = {}) {
   const seen = new Set();
   let nodes = 0;
   const key = s => [...s].sort().join(',');
@@ -218,10 +236,12 @@ export function assemblyFrom(m, present = new Set(), { limit = 40000 } = {}) {
     const needed = id => m.parts.some(q => !q.temp && !s.has(q.id) && q.on.some(alt => alt.includes(id)));
     for (const p of m.parts) if (!s.has(p.id) && !p.temp) { const r = canPlace(m, s, p.id); if (r.ok) moves.push({ op: 'in', id: p.id, dir: r.dir }); }
     for (const p of m.parts) if (s.has(p.id) && p.temp && !needed(p.id)) { const r = canRemove(m, s, p.id); if (r.ok) moves.push({ op: 'out', id: p.id, dir: r.dir }); }
-    for (const p of m.parts) if (!s.has(p.id) && p.temp && needed(p.id)) { const r = canPlace(m, s, p.id); if (r.ok) moves.push({ op: 'in', id: p.id, dir: r.dir }); }
+    const onSite = m.parts.filter(p => p.temp && s.has(p.id)).length;
+    if (onSite < temps) for (const p of m.parts) if (!s.has(p.id) && p.temp && needed(p.id)) { const r = canPlace(m, s, p.id); if (r.ok) moves.push({ op: 'in', id: p.id, dir: r.dir }); }
     for (const mv of moves) {
       const t = new Set(s);
       mv.op === 'in' ? t.add(mv.id) : t.delete(mv.id);
+      if (stable && t.size && !stable(t)) continue;
       const rest = go(t);
       if (rest) return [mv, ...rest];
     }
@@ -233,7 +253,7 @@ export function assemblyFrom(m, present = new Set(), { limit = 40000 } = {}) {
 // a way to take everything apart from `present`, temporary works allowed back
 // in: [{ op, id, dir }] or null. Removing a lasting part never makes another
 // removal harder, so lasting parts go first and the search rarely turns back.
-export function dismantleOrder(m, present = m.goal, { limit = 40000 } = {}) {
+export function dismantleOrder(m, present = m.goal, { limit = 40000, stable = null } = {}) {
   const seen = new Set();
   let nodes = 0;
   function go(s) {
@@ -243,7 +263,14 @@ export function dismantleOrder(m, present = m.goal, { limit = 40000 } = {}) {
     if (seen.has(k)) return null;
     seen.add(k);
     const moves = [];
-    for (const id of s) if (!m.byId.get(id).temp) { const r = canRemove(m, s, id); if (r.ok) { moves.push({ op: 'out', id, dir: r.dir }); break; } }
+    const after = id => { const t = new Set(s); t.delete(id); return t; };
+    // without the physics, taking a lasting part out never makes another
+    // removal harder, so the first that goes will do; with it, one can (a back
+    // block gone tips the corbel it held down), so every one is a branch
+    for (const id of s) if (!m.byId.get(id).temp) {
+      const r = canRemove(m, s, id);
+      if (r.ok && (!stable || s.size === 1 || stable(after(id)))) { moves.push({ op: 'out', id, dir: r.dir }); if (!stable) break; }
+    }
     if (!moves.length) {
       for (const p of m.parts) if (p.temp && !s.has(p.id)) { const r = canPlace(m, s, p.id); if (r.ok) moves.push({ op: 'in', id: p.id, dir: r.dir }); }
       for (const id of s) if (m.byId.get(id).temp) { const r = canRemove(m, s, id); if (r.ok) moves.push({ op: 'out', id, dir: r.dir }); }
@@ -251,6 +278,7 @@ export function dismantleOrder(m, present = m.goal, { limit = 40000 } = {}) {
     for (const mv of moves) {
       const t = new Set(s);
       mv.op === 'in' ? t.add(mv.id) : t.delete(mv.id);
+      if (stable && t.size && !stable(t)) continue;
       const rest = go(t);
       if (rest) return [mv, ...rest];
     }
@@ -306,11 +334,13 @@ export function colonnade({ n = 4, cornice = true, steps = 1 } = {}) {
   return parts;
 }
 
-// a wall of blocks in running bond: every block rests on the two below it
-export function wall({ courses = 3, len = 4, depth = 1 } = {}) {
+// a wall of blocks three long, each course set over by one (a third bond):
+// a block keeps two thirds of its bed on one block below, so it stands on that
+// one alone, but not on the third it has on the other
+export function wall({ courses = 3, len = 3, depth = 1, b = 3 } = {}) {
   const { parts, add } = kit();
   for (let c = 0; c < courses; c++) {
-    const cuts = c % 2 ? [0, ...Array.from({ length: len }, (_, i) => 2 * i + 1), 2 * len] : Array.from({ length: len + 1 }, (_, i) => 2 * i);
+    const cuts = c % 2 ? [0, ...Array.from({ length: len }, (_, i) => b * i + 1), b * len] : Array.from({ length: len + 1 }, (_, i) => b * i);
     for (let i = 0; i + 1 < cuts.length; i++) add(`w${c}_${i}`, `Course ${c + 1}, block ${i + 1}`, 'block', 'stone', box(cuts[i], 0, c, cuts[i + 1], depth, c + 1));
   }
   return parts;
@@ -381,12 +411,15 @@ export function arch({ m = 5, r = 1.6, t = .8, h = 2, x = 0, piers = true, prefi
 }
 
 // a row of arches on shared piers
-export function arcade({ count = 2, m = 5, r = 1.4, t = .7, h = 2 } = {}) {
-  const R = r + t, pitch = 2 * R + .4;           // a pier between two arches is 2t + .4 wide
+// (gap: what an inner pier has beyond the two arch feet it carries; abut: what
+// an end pier has beyond its one. Slender inner piers stand only while the
+// thrusts of the arches on both sides balance)
+export function arcade({ count = 2, m = 5, r = 1.4, t = .7, h = 2, gap = .4, abut = .4 } = {}) {
+  const R = r + t, pitch = 2 * R + gap;          // a pier between two arches is 2t + gap wide
   const parts = [];
   for (let j = 0; j <= count; j++) {
-    const x0 = j === 0 ? -R - .4 : (j - 1) * pitch + r;
-    const x1 = j === count ? (count - 1) * pitch + R + .4 : j * pitch - r;
+    const x0 = j === 0 ? -R - abut : (j - 1) * pitch + r;
+    const x1 = j === count ? (count - 1) * pitch + R + abut : j * pitch - r;
     parts.push({ id: 'pier' + j, name: `Pier ${j + 1}`, kind: 'pier', mat: 'stone', pieces: [box(x0, 0, 0, x1, 1, h)] });
   }
   for (let j = 0; j < count; j++) {
@@ -444,16 +477,16 @@ export function gableRoof({ lx = 4, ly = 3, h = 2.2, rise = 1.4, rafters = 3, pu
   const xs = Array.from({ length: rafters }, (_, i) => rafters === 1 ? lx / 2 : .25 + i * (lx - .5) / (rafters - 1));
   xs.forEach((x, i) => {
     // front slope: from the plate's inner... outer edge y = 0 up to the ridge face
-    add(`rf${i}`, `Front rafter ${i + 1}`, 'rafter', 'timber', prism([[0, zt], [ym - rw, zr], [ym - rw, zr + tv], [0, zt + tv]], 'x', x - .07, x + .07), { on: [['w0', 'rg']], slide: ['+z', '-y'] });
-    add(`rb${i}`, `Back rafter ${i + 1}`, 'rafter', 'timber', prism([[ly, zt], [ly, zt + tv], [ym + rw, zr + tv], [ym + rw, zr]], 'x', x - .07, x + .07), { on: [['w1', 'rg']], slide: ['+z', '+y'] });
+    add(`rf${i}`, `Front rafter ${i + 1}`, 'rafter', 'timber', prism([[0, zt], [ym - rw, zr], [ym - rw, zr + tv], [0, zt + tv]], 'x', x - .07, x + .07), { on: [['w0', 'rg']], slide: ['+z', '-y'], fix: ['w0', 'rg'] });
+    add(`rb${i}`, `Back rafter ${i + 1}`, 'rafter', 'timber', prism([[ly, zt], [ly, zt + tv], [ym + rw, zr + tv], [ym + rw, zr]], 'x', x - .07, x + .07), { on: [['w1', 'rg']], slide: ['+z', '+y'], fix: ['w1', 'rg'] });
   });
   if (purlins) {
     const pw = .2, ph = .18;
     const yf = (ym - rw) * .5;                   // halfway up the front slope
     const ztop = y => zt + tv + slope * y;       // the front rafters' top line
-    add('uf', 'Front purlin', 'purlin', 'timber', box(-.3, yf - pw / 2, ztop(yf + pw / 2), lx + .3, yf + pw / 2, ztop(yf + pw / 2) + ph), { on: [xs.map((_, i) => `rf${i}`)] });
+    add('uf', 'Front purlin', 'purlin', 'timber', box(-.3, yf - pw / 2, ztop(yf + pw / 2), lx + .3, yf + pw / 2, ztop(yf + pw / 2) + ph), { on: [xs.map((_, i) => `rf${i}`)], fix: xs.map((_, i) => `rf${i}`) });
     const yb = ly - yf;
-    add('ub', 'Back purlin', 'purlin', 'timber', box(-.3, yb - pw / 2, ztop(yf + pw / 2), lx + .3, yb + pw / 2, ztop(yf + pw / 2) + ph), { on: [xs.map((_, i) => `rb${i}`)] });
+    add('ub', 'Back purlin', 'purlin', 'timber', box(-.3, yb - pw / 2, ztop(yf + pw / 2), lx + .3, yb + pw / 2, ztop(yf + pw / 2) + ph), { on: [xs.map((_, i) => `rb${i}`)], fix: xs.map((_, i) => `rb${i}`) });
   }
   return parts;
 }
@@ -567,13 +600,13 @@ export function steelFrame({ bays = 2, storeys = 1, braced = true, deckOn = true
       // one diagonal per side, in the first bay, from low on one column to high on the next
       const xa = c / 2, xb = bay - c / 2, za = z + .25, zb2 = z + h - .55, tv = .2;
       add(`x${s}_${r}`, `Brace ${r ? 'B' : 'A'}, level ${s + 1}`, 'brace', 'steel',
-        prism([[xa, za], [xb, zb2], [xb, zb2 + tv], [xa, za + tv]], 'y', y - .05, y + .05), { on: [[`c${s}_0_${r}`, `c${s}_1_${r}`]], slide: [r ? '+y' : '-y', '+z'] });
+        prism([[xa, za], [xb, zb2], [xb, zb2 + tv], [xa, za + tv]], 'y', y - .05, y + .05), { on: [[`c${s}_0_${r}`, `c${s}_1_${r}`]], slide: [r ? '+y' : '-y', '+z'], fix: [`c${s}_0_${r}`, `c${s}_1_${r}`] });
     }
     z = zb + .62;
     if (deckOn) {
       // a panel per bay and half, spanning cross beam to cross beam
       for (let i = 0; i < bays; i++) for (const [k, y0, y1] of [[0, -.4, depth / 2], [1, depth / 2, depth + .4]]) {
-        add(`d${s}_${i}${k}`, `Deck panel ${i + 1}${'AB'[k]}, level ${s + 1}`, 'deck', 'concrete', box(i * bay, y0, z, (i + 1) * bay, y1, z + .18));
+        add(`d${s}_${i}${k}`, `Deck panel ${i + 1}${'AB'[k]}, level ${s + 1}`, 'deck', 'concrete', box(i * bay - (i === 0 ? .3 : 0), y0, z, (i + 1) * bay + (i === bays - 1 ? .3 : 0), y1, z + .18));
       }
       z += .18;
     }
@@ -582,6 +615,7 @@ export function steelFrame({ bays = 2, storeys = 1, braced = true, deckOn = true
 }
 
 // Dom-ino: columns, flat slabs, a stair, and an outer skin hung on the slab edges
+// (each panel hangs from the slab above it)
 export function domino({ storeys = 2, stair = true, cladding = false, lx = 5, ly = 3.4, h = 2.6 } = {}) {
   const { parts, add } = kit();
   const c = .26, st = .26;
@@ -595,7 +629,7 @@ export function domino({ storeys = 2, stair = true, cladding = false, lx = 5, ly
       const zc0 = z, zc1 = z + h, n = 3;
       for (let k = 0; k < n; k++) {
         const x0 = k * lx / n + .02, x1 = (k + 1) * lx / n - .02;
-        add(`e${s}_${k}`, `Front panel ${k + 1}, level ${s + 1}`, 'panel', 'glass', box(x0, -.12, zc0, x1, -.02, zc1 - .02), { on: [[s === 0 ? 'f' : 's' + (s - 1)]], slide: ['-y', '+z'] });
+        add(`e${s}_${k}`, `Front panel ${k + 1}, level ${s + 1}`, 'panel', 'glass', box(x0, -.12, zc0, x1, -.02, zc1 - .02), { on: [['s' + s]], slide: ['-y', '+z'], fix: ['s' + s] });
       }
     }
     z += h + st;

@@ -182,7 +182,7 @@ async function finale(m, { rainFor = 2600 } = {}) {
   sfx.thud();
   const rain = createRain(m);
   rain.start();
-  stage.rig.step(-1);
+  stage.rig.frameTurn(null, -1);
   await wait(rainFor, { essential: true });
   rain.stop();
   await wait(700, { essential: true });

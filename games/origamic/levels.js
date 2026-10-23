@@ -23,6 +23,7 @@ export const BUILDS = {
   colonnade: { cols: [[1, null], [1, [-3, 1, 4]], [1, null], [1, [-3, 1, 4]], [1, null], [1, [-3, 1, 4]], [1, null], [1, [-3, 1, 4]]] },
   terrace: { ...BIG, cols: [[3, null], [6, [-4, -3, -2, -1, 0, 1, 2, 3, 4]]] },
   hall: { ...BIG, cols: [[2, null], [1, [-4, 2, 6]], [4, [-4, -2, 0, 2, 4]], [1, [-4, 2, 6]]] },
+  portico: { cols: [[2, null], [1, [-3, 1, 4]], [3, [-3, -1, 1, 3, 4]], [1, [-3, 1, 4]]] },
 };
 
 export const PACKS = [
@@ -38,17 +39,17 @@ export const PACKS = [
   ] },
   { id: 'B', name: 'Setbacks', brief: 'Two wall pieces and two roofs make a step back. The folds alternate from the floor: valley, mountain, valley, mountain, valley.', levels: [
     L('B1', 'read', 'Steps', { build: 'steps' }),
-    L('B2', 'draw', 'Steps', { build: 'steps' }),
+    L('B2', 'draw', 'A step', { strips: [1, 1], steps: [2, 2], width: [3, 4] }),
     L('B3', 'tear', 'A broken step', { strips: [2, 2], steps: [2, 2], width: [2, 3], broken: 1 }),
     L('B4', 'read', 'Setback tower', { build: 'setback' }),
-    L('B5', 'draw', 'Setback tower', { build: 'setback' }),
+    L('B5', 'draw', 'Step and tower', { strips: [2, 2], steps: [2, 2], width: [1, 3] }),
     L('B6', 'read', 'Two setbacks', { strips: [2, 2], steps: [2, 2], width: [2, 3] }),
     L('B7', 'draw', 'Box and step', { strips: [2, 2], steps: [1, 2], width: [2, 3] }),
     L('B8', 'tear', 'Two broken', { strips: [3, 3], steps: [1, 2], width: [1, 2], broken: 2 }),
   ] },
   { id: 'C', name: 'Rows', brief: 'Neighbouring strips with different sections make a facade in relief. Read it column by column.', levels: [
     L('C1', 'read', 'A row', { strips: [3, 3], steps: [1, 1], width: [1, 2] }),
-    L('C2', 'draw', 'A row', { strips: [3, 3], steps: [1, 1], width: [1, 2] }),
+    L('C2', 'draw', 'Wide row', { strips: [2, 3], steps: [1, 1], width: [2, 3] }),
     L('C3', 'tear', 'Row check', { strips: [3, 4], steps: [1, 2], width: [1, 2], broken: 1 }),
     L('C4', 'read', 'Relief', { strips: [3, 4], steps: [1, 2], width: [1, 2] }),
     L('C5', 'draw', 'Relief', { strips: [3, 3], steps: [1, 2], width: [1, 2] }),
@@ -57,18 +58,18 @@ export const PACKS = [
     L('C8', 'tear', 'Townhouse check', { strips: [4, 4], steps: [1, 2], width: [1, 2], broken: 2 }),
   ] },
   { id: 'D', name: 'From drawings', brief: 'No model: only a plan and an elevation. The floor half of the card lies under the plan, the wall half behind the elevation.', levels: [
-    L('D1', 'plans', 'A block', { build: 'block' }),
-    L('D2', 'plans', 'A tower', { build: 'tower' }),
-    L('D3', 'plans', 'The gate', { build: 'gate' }),
-    L('D4', 'plans', 'Steps', { build: 'steps' }),
+    L('D1', 'plans', 'A box', { strips: [1, 1], steps: [1, 1], width: [3, 4] }),
+    L('D2', 'plans', 'A step', { strips: [1, 1], steps: [2, 2], width: [2, 3] }),
+    L('D3', 'plans', 'The portico', { build: 'portico' }),
+    L('D4', 'plans', 'Twin boxes', { strips: [2, 2], steps: [1, 1], width: [1, 2] }),
     L('D5', 'plans', 'Two boxes', { strips: [2, 2], steps: [1, 1], width: [2, 3] }),
     L('D6', 'plans', 'Setbacks', { strips: [2, 2], steps: [1, 2], width: [2, 3] }),
     L('D7', 'plans', 'A row', { strips: [3, 3], steps: [1, 2], width: [1, 2] }),
-    L('D8', 'plans', 'Ziggurat', { build: 'ziggurat' }),
+    L('D8', 'plans', 'Relief', { strips: [3, 4], steps: [1, 2], width: [1, 2] }),
   ] },
   { id: 'E', name: 'Terraces', brief: 'Three steps in a strip on a deeper card: auditoria, stepped housing, hillside terraces.', levels: [
     L('E1', 'read', 'Auditorium', { build: 'terrace' }),
-    L('E2', 'draw', 'Auditorium', { build: 'terrace' }),
+    L('E2', 'draw', 'Grandstand', { ...BIG, strips: [1, 1], steps: [3, 3], width: [4, 6] }),
     L('E3', 'read', 'Terraced', { ...BIG, strips: [2, 3], steps: [2, 3], width: [2, 3] }),
     L('E4', 'tear', 'Terrace check', { ...BIG, strips: [3, 3], steps: [2, 3], width: [1, 3], broken: 1 }),
     L('E5', 'draw', 'Terraced', { ...BIG, strips: [2, 2], steps: [2, 3], width: [2, 3] }),

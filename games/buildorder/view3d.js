@@ -53,19 +53,29 @@ export function createBuildView(model, { invalidate = () => {} } = {}) {
 
   const centre = p => new THREE.Vector3(...p.centre);
 
+  // one motion per part at a time: a new one stops the last, and the last's
+  // ending (a fade out, a hide) does not run after the part has moved on
+  function halt(r) {
+    if (r.tw) { r.tw.cancel(); r.tw = null; }
+    const lm = r.lines.material;
+    if (r.fading) { r.mat.opacity = 1; r.mat.transparent = false; lm.opacity = r.fading.lo; lm.transparent = r.fading.lt; r.mat.needsUpdate = lm.needsUpdate = true; r.fading = null; }
+    r.obj.quaternion.identity();
+  }
+
   // three layers of tint: a state (selected by a hint, error), a mark the
   // player set, and the pointer; the strongest wins
   function paint(r) {
-    const k = Math.max({ normal: 0, selected: .42, error: .7 }[r.state] ?? 0, r.marked ? .5 : 0, r.hover ? .16 : 0);
+    const k = Math.max({ normal: 0, selected: .42, error: .7 }[r.state] ?? 0, r.marked ? .5 : 0, r.hover ? .16 : 0, r.kept ? .1 : 0);
     r.mat.color.copy(r.base).lerp(SIGNAL, k);
     r.mat.emissive.copy(SIGNAL).multiplyScalar(k * .25);
-    r.lines.setStyle(r.marked ? 'signal' : r.p.temp ? 'fold' : 'visible');
+    r.lines.setStyle(r.marked || r.kept ? 'signal' : r.p.temp ? 'fold' : 'visible');
     invalidate();
   }
 
   // where a part sits: an offset from home
   function place(id, v) {
     const r = parts.get(id);
+    halt(r);
     r.at.set(v[0] ?? v.x, v[1] ?? v.y, v[2] ?? v.z);
     r.obj.position.copy(r.at);
     const away = r.at.lengthSq() > 1e-6 && r.shown;
@@ -95,34 +105,78 @@ export function createBuildView(model, { invalidate = () => {} } = {}) {
     setState(id, s) { const r = parts.get(id); if (!r || r.state === s) return; r.state = s; paint(r); },
     hover(id, on) { const r = parts.get(id); if (!r || r.hover === on) return; r.hover = on; paint(r); },
     mark(id, on) { const r = parts.get(id); if (!r || r.marked === on) return; r.marked = on; paint(r); },
+    // a part that must stay up: outlined in the signal colour
+    keep(id, on) { const r = parts.get(id); if (!r || !!r.kept === on) return; r.kept = on; paint(r); },
+    // only the dashed outline where the part would be (a part that is missing)
+    ghostOnly(id, on) {
+      const r = parts.get(id);
+      place(id, [0, 0, 0]);
+      r.shown = !on; r.obj.visible = !on; r.ghost.visible = on;
+    },
     clearStates() { for (const r of parts.values()) { r.state = 'normal'; r.hover = r.marked = false; paint(r); } },
     // fly from offset a to offset b; fade out on the way when `out`
     fly(id, a, b, { duration = 650, out = false, easing = out ? ease.cubicIn : ease.cubicOut } = {}) {
       const r = parts.get(id);
+      halt(r);
       const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b);
       r.leader.setSegments([]); r.ghost.visible = false;
-      const lm = r.lines.material, lo = lm.opacity, lt = lm.transparent;
-      if (out) { r.mat.transparent = lm.transparent = true; r.mat.needsUpdate = lm.needsUpdate = true; }
-      return animate({ duration, ease: easing, essential: true, update: (v, k) => {
+      const lm = r.lines.material, lo = lm.opacity;
+      if (out) { r.fading = { lo, lt: lm.transparent }; r.mat.transparent = lm.transparent = true; r.mat.needsUpdate = lm.needsUpdate = true; }
+      const tw = r.tw = animate({ duration, ease: easing, essential: true, update: (v, k) => {
         r.obj.position.lerpVectors(A, B, v);
         if (out) { const f = 1 - Math.max(0, (k - .45) / .55); r.mat.opacity = f; lm.opacity = lo * f; }
-      } }).promise.then(() => {
-        r.at.copy(B);
+      } });
+      return tw.promise.then(done => {
+        if (!done || r.tw !== tw) return;
+        r.tw = null;
         if (out) {
+          halt(r);
+          r.at.copy(B);
           r.shown = false; r.obj.visible = false; r.ghost.visible = false;
-          r.mat.opacity = 1; r.mat.transparent = false; lm.opacity = lo; lm.transparent = lt; r.mat.needsUpdate = lm.needsUpdate = true;
         }
         else place(id, B.toArray());
       });
     },
+    // a pose from the physics: the part's centre at c (world), turned by q
+    pose(id, c, q) {
+      const r = parts.get(id);
+      if (r.tw) { r.tw.cancel(); r.tw = null; }
+      r.ghost.visible = false; r.leader.setSegments([]);
+      const home = centre(r.p), quat = new THREE.Quaternion(q.x, q.y, q.z, q.w);
+      r.obj.quaternion.copy(quat);
+      r.obj.position.set(c.x, c.y, c.z).sub(home.applyQuaternion(quat));
+    },
+    // where the part is now, as the physics sees it: centre and turn
+    now(id) {
+      const r = parts.get(id);
+      const c = centre(r.p).applyQuaternion(r.obj.quaternion).add(r.obj.position);
+      return { c, q: r.obj.quaternion.clone() };
+    },
+    // back from wherever the physics left it to an offset from home
+    settleTo(id, b = [0, 0, 0], { duration = 700 } = {}) {
+      const r = parts.get(id);
+      if (r.tw) { r.tw.cancel(); r.tw = null; }
+      const P0 = r.obj.position.clone(), Q0 = r.obj.quaternion.clone(), B = new THREE.Vector3(...b), I = new THREE.Quaternion();
+      const home = centre(r.p);
+      const tw = r.tw = animate({ duration, ease: ease.cubicInOut, essential: true, update: v => {
+        r.obj.quaternion.slerpQuaternions(Q0, I, v);
+        // the centre travels straight; the turn is about the centre
+        const c0 = home.clone().applyQuaternion(Q0).add(P0), c1 = home.clone().add(B);
+        const c = c0.lerp(c1, v);
+        r.obj.position.copy(c).sub(home.clone().applyQuaternion(r.obj.quaternion));
+      } });
+      return tw.promise.then(done => { if (done && r.tw === tw) { r.tw = null; place(id, b); } });
+    },
     // a small refusal along the way it tried to go
     shake(id, dir = [0, 0, 1]) {
       const r = parts.get(id);
+      halt(r);
       const home = r.at.clone(), d = new THREE.Vector3(...dir);
-      return animate({ duration: 380, ease: ease.linear, essential: true, update: (v, k) => {
+      const tw = r.tw = animate({ duration: 380, ease: ease.linear, essential: true, update: (v, k) => {
         const a = Math.sin(k * Math.PI * 6) * (1 - k) * .09;
         r.obj.position.copy(home).addScaledVector(d, a);
-      } }).promise.then(() => r.obj.position.copy(home));
+      } });
+      return tw.promise.then(done => { if (done && r.tw === tw) { r.tw = null; r.obj.position.copy(home); } });
     },
     // the model's bounds at home (and, with offsets, wherever the parts are now)
     box(all = false) {

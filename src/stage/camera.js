@@ -217,9 +217,19 @@ export function createCameraRig(host, options = {}) {
   }
 
   // re-fit the last framed content (on resize or a new free rect), without animation
-  function reframe() {
-    if (lastFrame) frame(lastFrame.what, { ...lastFrame.opts, animate: false, yaw: st.yaw, pitch: st.pitch });
+  // (animated: glide there, toward the yaw a turn in progress is heading for)
+  function reframe({ animate = false } = {}) {
+    if (lastFrame) frame(lastFrame.what, { ...lastFrame.opts, animate, yaw: animate ? undefined : st.yaw, pitch: st.pitch, duration: 700 });
     else changed();
+  }
+
+  // the end of a level: turn by n yaw steps and frame `what` in one glide, so
+  // the turn never leaves the framing half done
+  // (what = null: what was framed last, as it was framed)
+  function frameTurn(what, n = -1, opts = {}) {
+    const base = what ? { what, opts: {} } : lastFrame;
+    if (!base) return Promise.resolve(false);
+    return frame(base.what, { ...base.opts, ...opts, animate: true, yaw: stepOf(motion?.goalYaw ?? st.yaw) - n * o.snap, duration: opts.duration ?? 1100 });
   }
 
   // one slow orbit on success; any touch ends it early. Resolves when done.
@@ -347,7 +357,7 @@ export function createCameraRig(host, options = {}) {
     get busy() { return !!motion || (gesture && gesture.kind !== 'pending'); },
     snap: o.snap, snapOffset: o.snapOffset,
     pxPerUnit: () => st.scale,
-    update, frame, reframe, setView, settle, victoryOrbit, setPerspective, stop,
+    update, frame, frameTurn, reframe, setView, settle, victoryOrbit, setPerspective, stop,
     togglePerspective(anim = true) { return setPerspective(st.persp < .5, anim); },
     // rotate by whole yaw steps (keyboard), or tilt by degrees
     step(n = 1) { return glide({ yaw: stepOf(st.yaw) - n * o.snap }, { duration: 520, easing: ease.backOut }); },

@@ -97,6 +97,13 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
       if (phone) bottom = Math.min(bottom, cb.top - 4);
       else right = Math.min(right, cb.left - 24);
     }
+    // the summary sheet, when it is up, keeps its corner too
+    const sheet = document.querySelector('.udp-sheetwrap.is-on');
+    const shb = sheet ? sheet.getBoundingClientRect() : null;
+    if (shb && shb.height > 0) {
+      if (phone) bottom = Math.min(bottom, shb.top - 4);
+      else right = Math.min(right, shb.left - 24);
+    }
     // on a wide screen the title column sits beside the model, not above it
     let y0 = top;
     if (!phone && W > 1100 && !stacked) {
@@ -107,7 +114,7 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
     left += reserve.left; right -= reserve.right;
     return { x: left, y: y0, w: Math.max(80, right - left), h: Math.max(80, bottom - y0) };
   }
-  function layout() { stage?.setRect(freeRect()); }
+  function layout(animate = false) { stage?.setRect(freeRect(), { animate }); }
   const ro = new ResizeObserver(() => layout());
   for (const el of [head, stat, card, bar]) ro.observe(el);
   window.addEventListener('resize', layout);

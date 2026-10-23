@@ -23,7 +23,7 @@ export const GAMES = [
   { id: 'developments', prefix: 'D', family: 'Solid', name: 'Developments', blurb: 'Cut solids open into nets, match the edges that glue, fold nets in your head.', ready: true },
   { id: 'stack', prefix: 'S', family: 'Solid', name: 'Stack', blurb: 'Drop housing modules onto a site so every unit is carried, lit, has a roof garden and a way in.', ready: true },
   { id: 'roof', prefix: 'R', family: 'Building', name: 'Roof Plans', blurb: 'Grow roofs from footprints, read hips and valleys, and drain the rain.', ready: true },
-  { id: 'buildorder', prefix: 'B', family: 'Building', name: 'Build Order', blurb: 'Take a building apart and put it together again, part by part, in an order that can actually stand.', ready: true },
+  { id: 'buildorder', prefix: 'B', family: 'Building', name: 'Build Order', blurb: 'Take a building apart and put it together again under real gravity: pull the wrong block and it comes down.', ready: true },
 ];
 const FAMILIES = [
   { id: 'Sheet', note: 'paper: folds, cuts, creases' },

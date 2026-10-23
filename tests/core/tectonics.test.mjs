@@ -58,13 +58,14 @@ for (const [name, fn] of Object.entries(BUILDERS)) {
   ok(!!dismantleOrder(m), `${name}: can be taken apart`);
 }
 
-// levels: unique ids, eight to a pack, every one playable
+// levels: unique ids, five to eight to a pack, every one playable by the rules
+// (the physics checks are in physics.test.mjs)
 const ids = new Set();
 for (const pk of PACKS) {
-  ok(pk.levels.length === 8, pk.id + ' has 8 levels');
+  ok(pk.levels.length >= 5 && pk.levels.length <= 8, pk.id + ' has 5 to 8 levels');
   for (const l of pk.levels) {
     ok(!ids.has(l.id), l.id + ' is unique'); ids.add(l.id);
-    ok(['dismantle', 'assemble', 'free'].includes(l.task), l.id + ' has a task');
+    ok(['dismantle', 'assemble', 'free', 'keep', 'test'].includes(l.task), l.id + ' has a task');
     const m = buildModel(l.build, l.opts);
     ok(m.parts.length >= 2, l.id + ' has parts');
     if (l.task === 'assemble') {
@@ -72,15 +73,16 @@ for (const pk of PACKS) {
       ok(s && s.filter(x => x.op === 'in' && m.goal.has(x.id)).length === m.goal.size, l.id + ' can be built');
       ok(removable(m, new Set()).length === 0, l.id + ' starts empty');
     }
-    if (l.task === 'dismantle') {
-      const s = dismantleOrder(m);
-      ok(!!s, l.id + ' can be taken apart');
-    }
-    if (l.task === 'free') {
-      const r = removable(m, m.goal);
-      ok(r.length >= 1 && r.length < m.goal.size, l.id + ' has some, not all, parts free');
+    if (l.task === 'dismantle') ok(!!dismantleOrder(m), l.id + ' can be taken apart');
+    if (l.task === 'keep') {
+      const re = new RegExp(l.keep), order = l.order.split(' ');
+      ok([...m.goal].some(id => re.test(id)), l.id + ' keeps some parts');
+      ok(order.length === l.target && order.every(id => m.goal.has(id) && !re.test(id)), l.id + ' its order takes out target parts, none kept');
     }
   }
+  // a pack does not repeat itself: no task on the same structure twice
+  const keys = pk.levels.map(l => l.task + ':' + l.build + ':' + JSON.stringify(l.opts));
+  ok(new Set(keys).size === keys.length, pk.id + ' has no repeated level');
 }
 ok(PACKS.length === 6, 'six packs');
 

@@ -206,13 +206,14 @@ export function createStage(container, opts = {}) {
     // render now (tests, screenshots); normally invalidate() is enough
     renderNow: render,
     // the screen rect (canvas px) the UI leaves free for 3D content
-    setRect(r) {
+    setRect(r, { animate = false } = {}) {
       const same = freeRect && r && ['x', 'y', 'w', 'h'].every(k => Math.abs(freeRect[k] - r[k]) < .5);
       freeRect = r ? { ...r } : null;
-      if (!same) rig.reframe();
+      if (!same) rig.reframe({ animate });
     },
     get rect() { return rect(); },
     frame: (what, o) => rig.frame(what ?? content, o),
+    frameTurn: (what, n, o) => rig.frameTurn(what, n, o),
     victoryOrbit: o => rig.victoryOrbit(o),
     // fn() after every render: labels and redlines follow the camera with it
     onRender(fn) { renderHooks.add(fn); return () => renderHooks.delete(fn); },

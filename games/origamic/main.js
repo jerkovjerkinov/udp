@@ -284,7 +284,7 @@ async function finale(v) {
   sfx.slide();
   await v.open(OPEN, 1700);
   sfx.thud();
-  stage.rig.step(-1);
+  stage.rig.frameTurn(null, -1);
   await wait(900, { essential: true });
 }
 
@@ -559,7 +559,7 @@ function tearTask(item, card, rng) {
       frameCard(view);
       await view.open(OPEN, 1700);
       sfx.thud();
-      stage.rig.step(-1);
+      stage.rig.frameTurn(null, -1);
       await wait(900, { essential: true });
     },
     dispose() { offTap(); board.el.removeEventListener('pointermove', move); board.dispose(); closeCard(); view.dispose(); },

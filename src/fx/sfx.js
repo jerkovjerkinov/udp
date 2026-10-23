@@ -12,7 +12,7 @@
 // itself a gesture). Nothing is created while muted.
 
 const KEY = 'udp.sfx';
-const NAMES = ['snap', 'tick', 'flap', 'punch', 'snip', 'slide', 'thud', 'error', 'done', 'pencil'];
+const NAMES = ['snap', 'tick', 'flap', 'punch', 'snip', 'slide', 'thud', 'error', 'done', 'pencil', 'crash'];
 
 function loadMuted() {
   try {
@@ -137,6 +137,16 @@ const VOICES = {
   thud(c, t) {
     tone(c, t, { f: vary(88), glideTo: 40, glide: .16, gain: .5, attack: .006, decay: .32 });
     hiss(c, t, { type: 'lowpass', f: 320, gain: .22, decay: .14 });
+  },
+  // a building coming down: a rumble and a scatter of knocks
+  crash(c, t) {
+    hiss(c, t, { type: 'lowpass', f: 520, sweepTo: 140, gain: .3, attack: .02, decay: .7 });
+    tone(c, t, { f: vary(70), glideTo: 34, glide: .5, gain: .4, attack: .01, decay: .6 });
+    for (let k = 0; k < 6; k++) {
+      const dt = .06 + k * vary(.09, .4);
+      tone(c, t + dt, { f: vary(120 + k * 18, .2), glideTo: 50, glide: .08, gain: .22 / (1 + k * .3), decay: .12 });
+      hiss(c, t + dt, { type: 'bandpass', f: vary(1400, .3), Q: 1.4, gain: .08, decay: .03 });
+    }
   },
   // a low, soft tone; never a buzzer
   error(c, t) {

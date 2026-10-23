@@ -16,7 +16,7 @@ export const PACKS = [
     L('A1', 'holes', 'In half'),
     L('A2', 'holes', 'In half again', { punches: 2 }),
     L('A3', 'mirror', 'The L', { shape: 'ell' }),
-    L('A4', 'holes', 'Two folds', { folds: 2 }),
+    L('A4', 'holes', 'Odd sheet', { n: 5, punches: 2 }),
     L('A5', 'cut', 'A notch', { shape: 'notch' }),
     L('A6', 'reverse', 'Make the twins'),
     L('A7', 'mirror', 'The triangle', { shape: 'tri', folds: 2 }),

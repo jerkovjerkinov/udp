@@ -486,7 +486,7 @@ function createPlay(item, lv, { free = false } = {}) {
       hand = null;
       sfx.done();
       // a slow quarter turn round the finished stack, centred on the site
-      stage.rig.step(-1);
+      stage.rig.frameTurn(null, -1);
       await wait(900, { essential: true });
     },
     dispose() {

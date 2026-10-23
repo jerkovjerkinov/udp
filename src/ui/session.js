@@ -117,13 +117,14 @@ export function createSession({ def, frame, stage, redlines }) {
       if (a.primary) summaryPrimary = a.run;
     }
     wrap.appendChild(bar);
-    requestAnimationFrame(() => wrap.classList.add('is-on'));
+    requestAnimationFrame(() => { wrap.classList.add('is-on'); frame.layout(true); });
     frame.hide(true);
   }
   function closeSummary() {
     wrap.classList.remove('is-on');
     summaryPrimary = null;
     frame.hide(false);
+    frame.layout();
   }
   // while the sheet is up, Enter takes its primary action, not the game's
   document.addEventListener('keydown', ev => {
