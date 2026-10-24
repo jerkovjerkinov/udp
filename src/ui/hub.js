@@ -1,8 +1,8 @@
-// The hub: seven games in three families, each with a small plaster model that
+// The hub: eight games in three families, each with a small plaster model that
 // turns slowly under the pointer, today's daily sheet and the streak.
 //
 // One WebGL renderer draws every card's model into its own scissor rect on a
-// fixed canvas behind the page, so seven models cost one context.
+// fixed canvas behind the page, so eight models cost one context.
 
 import * as THREE from 'three';
 import { createSolidView } from '../stage/solids.js';
@@ -26,6 +26,7 @@ export const GAMES = [
   { id: 'stack', prefix: 'S', family: 'Solid', name: 'Stack', blurb: 'Stack housing on a site so every home is held up, gets daylight, keeps some open roof and has a way in.', ready: true },
   { id: 'drawing', prefix: 'A', family: 'Building', name: 'Drawing Set', blurb: 'Draw a building as it looks from the front, the side and above, and work out a building from its drawings.', ready: true },
   { id: 'roof', prefix: 'R', family: 'Building', name: 'Roof Plans', blurb: 'Grow roofs from footprints, read hips and valleys, and drain the rain.', ready: true },
+  { id: 'oblique', prefix: 'V', family: 'Building', name: 'Oblique', blurb: 'The other ways of showing a building: find the one view a figure was painted for, and more to come.', ready: true },
   { id: 'buildorder', prefix: 'B', family: 'Building', name: 'Build Order', blurb: 'Take a building apart and put it back together under real gravity. Pull the wrong block and it comes down.', ready: true },
 ];
 const FAMILIES = [
@@ -67,6 +68,8 @@ const MODELS = {
   roof: () => [FORMS['hip-house'].make()],
   // a house with a cross gable, the way the first drawings see it
   drawing: () => drawForm('cross-house'),
+  // two walls at two depths: an anamorphic figure lives across them
+  oblique: () => [box(0, 0, 0, 2.4, .3, 1.8), box(.6, 1.6, 0, 2.4, .3, 2.6)],
   // a two-storey frame: columns, slabs and a stair core
   buildorder: () => {
     const out = [box(0, 0, 0, 3, 2, .12), box(0, 0, 1.2, 3, 2, .12), box(0, 0, 2.4, 3, 2, .12)];
@@ -139,8 +142,8 @@ export function createHub(root) {
   root.innerHTML = `<div class="udp-hub">
     <div class="udp-hub-top">
       <div><nav class="udp-brand"><span class="udp-long">Unnamed Drawing Project</span><span class="udp-sep">·</span><span>Index of sheets</span></nav>
-        <h1 class="udp-hub-title">Seven drawings to think in.<b>Unnamed Drawing Project</b></h1>
-        <p class="udp-hub-sub">Spatial puzzles for architects: nets, elevations, roofs, pop-ups and the order things are built in. Every sheet asks you to see a form before you touch it.</p></div>
+        <h1 class="udp-hub-title">Eight drawings to think in.<b>Unnamed Drawing Project</b></h1>
+        <p class="udp-hub-sub">Spatial puzzles for architects: nets, elevations, roofs, pop-ups, the order things are built in and the views a figure is painted for. Every sheet asks you to see a form before you touch it.</p></div>
       <a class="udp-hub-daily" href="games/${daily}/index.html#daily=${date}">
         <span>Daily sheet · ${date}</span>
         <div class="udp-big" style="text-transform:none">${dailyDone ? 'Drawn' : GAMES.find(g => g.id === daily).name}</div>

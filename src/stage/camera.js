@@ -36,6 +36,7 @@ const DEFAULTS = {
   fov: 30 * D2R,
   orbit: true,
   zoom: true,
+  free: false,                // true: the yaw stays where it is let go, no steps
 };
 
 /**
@@ -142,6 +143,7 @@ export function createCameraRig(host, options = {}) {
 
   // settle the yaw on the nearest step (velocity in rad/s carries a flick on)
   function settle(vel = 0) {
+    if (o.free) return Promise.resolve(true);
     const goal = stepOf(st.yaw + Math.max(-1, Math.min(1, vel * .14)) * o.snap * 1.2);
     const dist = Math.abs(wrapPi(goal - st.yaw));
     if (dist < 1e-4) { st.yaw = wrapPi(goal); changed(); return Promise.resolve(true); }
@@ -338,7 +340,7 @@ export function createCameraRig(host, options = {}) {
       return;
     }
     // a touch that interrupted a glide leaves the yaw between steps: put it back
-    if (!motion && Math.abs(wrapPi(st.yaw - stepOf(st.yaw))) > 1e-3) settle();
+    if (!motion && !o.free && Math.abs(wrapPi(st.yaw - stepOf(st.yaw))) > 1e-3) settle();
     if (ev.type !== 'pointercancel') for (const fn of tapFns) fn(ev);
   }
 

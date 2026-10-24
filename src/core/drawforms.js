@@ -76,3 +76,6 @@ export const DRAW_FORMS = {
 };
 
 export const drawForm = key => DRAW_FORMS[key].make();
+
+// the builders, for games that compose their own scenes from the same parts
+export const PARTS = { box, gableX, gableY, shedX, pyramidOn, hipX, at };
