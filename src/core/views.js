@@ -286,3 +286,36 @@ export function shiftSteps(steps, [dx, dy]) {
 // the parts of a model as 3d segments for one kind of line (for the model overlay)
 export const parts3Of = (view, kind = 'seen') => view.lines.filter(l => l.kind === kind).flatMap(l => l.parts3);
 
+
+// Module lines: where the planes x, y or z = k (k a whole module) cross the
+// faces of the model, drawn faintly on the plaster so a wall can be counted
+// off in modules, like the crosses on the sheet. Each line sits a hair off its
+// face (lift) so it does not flicker in the plaster. Returns [[p, q], ...].
+export function moduleLines(solids, { step = 1, lift = .004 } = {}) {
+  const out = [];
+  for (const s of solids) for (const f of s.faces) {
+    const pts = f.loop.map(i => s.verts[i]);
+    const n = f.n;
+    for (let a = 0; a < 3; a++) {
+      if (Math.abs(n[a]) > .999) continue;            // the face lies in one of these planes
+      let lo = Infinity, hi = -Infinity;
+      for (const p of pts) { lo = Math.min(lo, p[a]); hi = Math.max(hi, p[a]); }
+      const along = cross(n, a === 0 ? [1, 0, 0] : a === 1 ? [0, 1, 0] : [0, 0, 1]);
+      for (let k = Math.ceil(lo / step + 1e-6) * step; k < hi - 1e-6; k += step) {
+        const hits = [];
+        for (let i = 0; i < pts.length; i++) {
+          const p = pts[i], q = pts[(i + 1) % pts.length];
+          if ((p[a] < k) === (q[a] < k)) continue;
+          const t = (k - p[a]) / (q[a] - p[a]);
+          hits.push(add(p, mul(sub(q, p), t)));
+        }
+        hits.sort((u, v) => dot(u, along) - dot(v, along));
+        for (let i = 0; i + 1 < hits.length; i += 2) {
+          if (len(sub(hits[i + 1], hits[i])) < 1e-6) continue;
+          out.push([add(hits[i], mul(n, lift)), add(hits[i + 1], mul(n, lift))]);
+        }
+      }
+    }
+  }
+  return out;
+}

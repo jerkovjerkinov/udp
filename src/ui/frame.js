@@ -22,6 +22,8 @@ const h = (tag, cls, html) => {
   return e;
 };
 export const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// a tool's label, with a shorter one for the phone bar if it has one
+const labelHTML = (label, short) => short ? `<span class="udp-l">${esc(label)}</span><span class="udp-s">${esc(short)}</span>` : esc(label);
 
 // ◆◆◇: n earned of total, the ones in fresh (indices) drawn in the signal colour;
 // star: true / false for a level with a master goal (★ / ☆, fresh index 3), undefined for none
@@ -294,6 +296,7 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
     // bottom tools: [{ id, label, key, keys, run, count, active, off, title }]
     tools(list) {
       elTools.replaceChildren();
+      bar.querySelectorAll('.udp-util .udp-spare').forEach(b => b.remove());
       keys = [];
       for (const t of list) {
         if (t.key || t.keys) keys.push({ key: t.key, keys: t.keys, label: t.legend || t.label, run: t.run });
@@ -301,12 +304,23 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
         const b = h('button', 'udp-btn');
         b.type = 'button';
         b.dataset.tool = t.id;
-        b.innerHTML = esc(t.label) + (t.count !== undefined ? `<span class="udp-count">${esc(t.count)}</span>` : '');
+        b.dataset.label = t.label;
+        if (t.short) b.dataset.short = t.short;
+        b.innerHTML = labelHTML(t.label, t.short) + (t.count !== undefined ? `<span class="udp-count">${esc(t.count)}</span>` : '');
         if (t.title || t.key) b.title = (t.title || t.label) + (t.key ? ` (${t.key})` : '');
         b.classList.toggle('is-active', !!t.active);
         b.classList.toggle('is-off', !!t.off);
         b.addEventListener('click', ev => { if (!b.classList.contains('is-off')) t.run?.(ev); });
         elTools.appendChild(b);
+        // a spare tool moves into the "more" menu on a phone, where the bar is short
+        if (t.spare) {
+          b.classList.add('is-spare');
+          const m = h('button', 'udp-btn udp-spare');
+          m.type = 'button';
+          m.textContent = t.label;
+          m.addEventListener('click', ev => { if (!b.classList.contains('is-off')) t.run?.(ev); });
+          bar.querySelector('.udp-util').prepend(m);
+        }
       }
       layout();
     },
@@ -315,9 +329,10 @@ export function createFrame({ game, name, stage, hubHref = '../../index.html' })
       const b = elTools.querySelector(`[data-tool="${id}"]`);
       if (!b) return;
       if (patch.label !== undefined || patch.count !== undefined) {
-        const label = patch.label ?? b.firstChild.textContent;
-        b.innerHTML = esc(label) + (patch.count !== undefined && patch.count !== null ? `<span class="udp-count">${esc(patch.count)}</span>` : '');
+        const label = patch.label ?? b.dataset.label;
+        b.innerHTML = labelHTML(label, patch.label !== undefined ? patch.short : b.dataset.short) + (patch.count !== undefined && patch.count !== null ? `<span class="udp-count">${esc(patch.count)}</span>` : '');
       }
+      if (patch.label !== undefined) { b.dataset.label = patch.label; if (patch.short) b.dataset.short = patch.short; else delete b.dataset.short; }
       if (patch.active !== undefined) b.classList.toggle('is-active', patch.active);
       if (patch.off !== undefined) b.classList.toggle('is-off', patch.off);
     },

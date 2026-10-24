@@ -25,7 +25,7 @@ import { createSession } from '../../src/ui/session.js';
 import { animate, ease, wait } from '../../src/fx/tween.js';
 import { sfx } from '../../src/fx/sfx.js';
 import { mergeSteps } from '../../src/core/lattice.js';
-import { VIEWS, STEP, viewOf, stepsAny } from '../../src/core/views.js';
+import { VIEWS, STEP, viewOf, stepsAny, moduleLines } from '../../src/core/views.js';
 import { DRAW_FORMS, drawForm } from '../../src/core/drawforms.js';
 import { compareDrawing, hiddenForComplete, mistake, signature, levelSheet, layout, answerSteps, pocheOf } from '../../src/core/drawtasks.js';
 import { triangulate } from '../../src/core/poly.js';
@@ -50,6 +50,8 @@ const TITLES = {
 const GIVEN_STYLE = { seen: 'visible', hidden: 'fold', cut: 'cutGiven' };
 const DRAWN_STYLE = { seen: 'profile', hidden: 'hiddenPen', cut: 'cutPen' };
 const PEN_LABEL = { seen: 'Pen: thin', hidden: 'Pen: dashed', cut: 'Pen: cut' };
+// the phone bar has room for the pen's name only
+const PEN_SHORT = { seen: 'Thin', hidden: 'Dashed', cut: 'Cut' };
 const POCHE = 'rgba(233, 230, 223, .2)';
 // the depth of a section's plane along its view: levels name it in modules,
 // across the building from the side the view looks from
@@ -154,14 +156,16 @@ function addModel(solids, view, { hidden = false } = {}) {
   }
   const arrowLine = createLines(arrow, 'signal', { on: 'model', renderOrder: 4 });
   const lifted = createLines([], 'signal', { on: 'model', renderOrder: 5 });
-  group.add(arrowLine, lifted);
+  // faint module lines on the plaster: walls count off like the crosses on the sheet
+  const mods = createLines(moduleLines(solids), 'module', { on: 'model', renderOrder: 1 });
+  group.add(mods, arrowLine, lifted);
   group.visible = !hidden;
   stage.content.add(group);
   stage.invalidate();
   return {
     group, views, box: bb,
     lift(segs) { lifted.setSegments(segs); stage.invalidate(); },
-    dispose() { views.forEach(v => v.dispose()); arrowLine.dispose(); lifted.dispose(); group.removeFromParent(); stage.invalidate(); },
+    dispose() { views.forEach(v => v.dispose()); mods.dispose(); arrowLine.dispose(); lifted.dispose(); group.removeFromParent(); stage.invalidate(); },
   };
 }
 
@@ -176,6 +180,8 @@ function addGlass(m, solids, view, v, { depth = null } = {}) {
   const U = new THREE.Vector3(...V.u), Wv = new THREE.Vector3(...V.w), Dv = new THREE.Vector3(...V.d);
   let t0 = Infinity;
   for (const s of solids) for (const p of s.verts) t0 = Math.min(t0, p[0] * V.d[0] + p[1] * V.d[1] + p[2] * V.d[2]);
+  let t1 = -Infinity;
+  for (const s of solids) for (const p of s.verts) t1 = Math.max(t1, p[0] * V.d[0] + p[1] * V.d[1] + p[2] * V.d[2]);
   t0 = depth !== null ? depth - .004 : t0 - .3;
   const at = ([x, y]) => U.clone().multiplyScalar((x - v.off[0]) * STEP).addScaledVector(Wv, (y - v.off[1]) * STEP).addScaledVector(Dv, t0).toArray();
   const b = grow(v.box, .6);
@@ -189,8 +195,14 @@ function addGlass(m, solids, view, v, { depth = null } = {}) {
   const seen = createLines([], 'profile', { on: 'sheet', renderOrder: 6 });
   const hidden = createLines([], 'hiddenPen', { on: 'sheet', renderOrder: 6 });
   const cut = createLines([], 'cutPen', { on: 'sheet', renderOrder: 6 });
+  // where the pen is on the sheet, found on the glass and on the model: a
+  // crosshair across the pane and a ray along the view that stops where it
+  // meets the plaster, so the sheet always has the model to measure against
+  const caster = new THREE.Raycaster();
+  const cross = createLines([], 'signalThin', { on: 'sheet', renderOrder: 7 });
+  const ray = createLines([], 'signalThin', { on: 'model', renderOrder: 7 });
   const glass = new THREE.Group();
-  glass.add(pane, rim, seen, hidden, cut);
+  glass.add(pane, rim, seen, hidden, cut, cross, ray);
   m.group.add(glass);
   let cap = null;
   return {
@@ -223,8 +235,20 @@ function addGlass(m, solids, view, v, { depth = null } = {}) {
       glass.add(cap);
       stage.invalidate();
     },
+    // q: a point on the sheet, or null to clear
+    point(q) {
+      if (!q) { cross.setSegments([]); ray.setSegments([]); stage.invalidate(); return; }
+      cross.setSegments([[at([b.x0, q[1]]), at([b.x1, q[1]])], [at([q[0], b.y0]), at([q[0], b.y1])]]);
+      const p = new THREE.Vector3(...at(q));
+      caster.set(p, Dv);
+      const faces = [];
+      for (const v of m.views) v.group.traverse(o => { if (o.isMesh && !o.isLineSegments2) faces.push(o); });
+      const hit = caster.intersectObjects(faces, false)[0];
+      ray.setSegments([[p.toArray(), p.clone().addScaledVector(Dv, hit ? hit.distance : t1 - t0 + .6).toArray()]]);
+      stage.invalidate();
+    },
     set visible(on) { glass.visible = on; stage.invalidate(); },
-    dispose() { geo.dispose(); mat.dispose(); rim.dispose(); seen.dispose(); hidden.dispose(); cut.dispose(); cap?.geometry.dispose(); cap?.material.dispose(); glass.removeFromParent(); },
+    dispose() { geo.dispose(); mat.dispose(); rim.dispose(); seen.dispose(); hidden.dispose(); cut.dispose(); cross.dispose(); ray.dispose(); cap?.geometry.dispose(); cap?.material.dispose(); glass.removeFromParent(); },
   };
 }
 
@@ -308,6 +332,7 @@ function drawingTask(item) {
   const pens = section ? ['cut', 'seen'] : item.hidden ? ['seen', 'hidden'] : ['seen'];
   let pen = pens[0];
   const penLabel = k => k === 'seen' && !section ? 'Pen: solid' : PEN_LABEL[k];
+  const penShort = k => '✎ ' + (k === 'seen' && !section ? 'Solid' : PEN_SHORT[k]);
   let drawn = new Map();
   const history = [];
   let guides = 0;
@@ -338,7 +363,7 @@ function drawingTask(item) {
     frame.sub(`${text}<span class="udp-count">${plural(n, 'line')} drawn</span>`, true);
     frame.primary({ label: 'Check', run: () => session.check(), disabled: !drawn.size, ready: false });
     frame.tool('undo', { off: !history.length });
-    frame.tool('pen', { label: penLabel(pen), active: pen !== pens[0] });
+    frame.tool('pen', { label: penLabel(pen), short: penShort(pen), active: pen !== pens[0] });
     stage.invalidate();
   }
 
@@ -414,6 +439,14 @@ function drawingTask(item) {
   }
 
   const offDraw = board.drawSegments({ commit, constrain: (a, p) => clamp(p), readout: false, onSnap: () => sfx.tick?.() });
+  // the pen's place on the model: while a finger draws, or wherever the mouse is
+  const offPoint = third ? () => {} : board.onPointer({
+    down: (ev, p) => glass.point(clamp(p)),
+    move: (ev, p, q, dragging) => { if (dragging || ev.pointerType === 'mouse') glass.point(clamp(p)); },
+    up: ev => { if (ev.pointerType !== 'mouse') glass.point(null); },
+  });
+  const unpoint = () => glass.point(null);
+  board.el.addEventListener('pointerleave', unpoint);
   // the very first sheet shows the gesture once, along a line already drawn
   const firstLine = item.id === 'A1' && !item.seed ? mergeSteps(given)[0] : null;
   let demoStop = null;
@@ -424,8 +457,8 @@ function drawingTask(item) {
   frame.title(TITLES[item.task], item.name);
   frame.tools([
     { id: 'undo', label: 'Undo', key: 'Z', keys: ['Ctrl+Z'], run: undo },
-    { id: 'reset', label: 'Clear', key: 'R', run: () => { if (drawn.size) { history.push({ del: [...drawn.keys()], was: [...drawn.values()] }); drawn = new Map(); sfx.slide(); render(); } } },
-    ...(pens.length > 1 ? [{ id: 'pen', label: penLabel(pen), key: 'P', title: 'Switch pens', run: () => { pen = pens[(pens.indexOf(pen) + 1) % pens.length]; sfx.tick(); render(); } }] : []),
+    { id: 'reset', label: 'Clear', key: 'R', spare: pens.length > 1, run: () => { if (drawn.size) { history.push({ del: [...drawn.keys()], was: [...drawn.values()] }); drawn = new Map(); sfx.slide(); render(); } } },
+    ...(pens.length > 1 ? [{ id: 'pen', label: penLabel(pen), short: penShort(pen), key: 'P', title: 'Switch pens', run: () => { pen = pens[(pens.indexOf(pen) + 1) % pens.length]; sfx.tick(); render(); } }] : []),
     ...(third ? [{ id: 'guides', label: 'Guides', key: 'G', title: 'Projection lines from the two views', run: () => showProjectors(!projOn) }] : [{ id: 'look', label: 'Look', key: 'L', run: () => look(item.view) }]),
     { id: 'hint', label: 'Hint', key: 'H', run: () => session.hint() },
   ]);
@@ -487,6 +520,7 @@ function drawingTask(item) {
       return { text: 'Here is the whole view for a moment. Trace over it while it lasts.' };
     },
     async solved() {
+      glass.point(null);
       clearGuides();
       for (const it of board.items()) if (/^(d\d|gc)/.test(String(it.id))) board.remove(it.id);
       mergeSteps(answer).forEach((l, i) => board.line(l.a, l.b, DRAWN_STYLE[l.kind], { id: 'ok' + i, hit: false }));
@@ -495,7 +529,7 @@ function drawingTask(item) {
       if (third) { frameModel(model); await cast(model); }
       await finale(model, raw.lines.filter(l => item.hidden || l.kind === 'seen').flatMap(l => l.parts3), item.view);
     },
-    dispose() { stopDemo(); offDraw(); offTap(); board.dispose(); closeCard(); glass.dispose(); model.dispose(); },
+    dispose() { stopDemo(); offDraw(); offPoint(); board.el.removeEventListener('pointerleave', unpoint); offTap(); board.dispose(); closeCard(); glass.dispose(); model.dispose(); },
   };
 }
 

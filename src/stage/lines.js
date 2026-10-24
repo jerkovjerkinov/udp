@@ -36,6 +36,7 @@ export const DRAFT = {
   cutPen:     { width: 4.2, tone: 'strong' },
   cutGiven:   { width: 3.4, tone: 'line' },
   guide:      { width: .75, tone: 'guide' },
+  module:     { width: .8, tone: 'guide' },
   signal:     { width: 3, tone: 'signal' },
   signalFold: { width: 1.6, dash: [6, 4], tone: 'signal' },
   signalThin: { width: 1.2, tone: 'signal' },

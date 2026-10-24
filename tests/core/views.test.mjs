@@ -1,5 +1,5 @@
 // node tests/core/views.test.mjs — Drawing Set: views, drawings and levels
-import { viewOf, stepsAny } from '../../src/core/views.js';
+import { viewOf, stepsAny, moduleLines } from '../../src/core/views.js';
 import { DRAW_FORMS, drawForm } from '../../src/core/drawforms.js';
 import { compareDrawing, mistake, levelSheet, answerSteps, hiddenForComplete, signature, pocheOf } from '../../src/core/drawtasks.js';
 import { FORMS } from '../../src/core/forms.js';
@@ -106,6 +106,17 @@ for (const pk of PACKS) {
     if (l.task === 'third') ok(l.given.length === 2 && !l.given.includes(l.view), l.id + ': two other views given');
     if (l.task !== 'which') ok(seen(t.raw).length >= 3, l.id + ': the answer has lines');
   }
+}
+
+// module lines on the plaster: a 4 x 2 x 1.5 block has 20, each across a whole face
+{
+  const ml = moduleLines(drawForm('flat-block'));
+  ok(ml.length === 20, 'flat block: 20 module lines, got ' + ml.length);
+  const L = ([p, q]) => Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]);
+  ok(ml.every(s => [2, 4, 1.5].some(w => Math.abs(L(s) - w) < 1e-6)), 'flat block: module lines run face to face');
+  // an L-shaped face (non-convex) is crossed in two pieces where the notch cuts in
+  const ell = moduleLines([FORMS['ell-prism'].make()]);
+  ok(ell.length > 0 && ell.every(s => L(s) > 1e-6), 'L block: module lines');
 }
 
 console.log(fails ? fails + ' failures' : 'views: all pass');

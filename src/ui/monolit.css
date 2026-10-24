@@ -78,6 +78,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .udp-btn:hover { color: var(--ink); }
 .udp-btn[disabled], .udp-btn.is-off { color: var(--grey3); cursor: default; }
 .udp-btn.is-on { color: var(--ink); }
+.udp-btn .udp-s { display: none; }
+.udp-util .udp-spare { display: none; }
 .udp-btn .udp-count { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; color: var(--grey2); margin-left: .6em; }
 .udp-btn.is-active::after {
   content: ''; position: absolute; left: 0; right: .14em; bottom: 8px; height: 1px; background: var(--signal);
@@ -447,6 +449,10 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   .udp-bar { flex-wrap: wrap; gap: 4px 12px; bottom: 10px; }
   .udp-bar-tools { gap: 14px; flex-wrap: wrap; }
   .udp-bar-tools .udp-btn { font-size: 12.5px; letter-spacing: .1em; }
+  .udp-bar-tools .udp-btn:has(.udp-s) .udp-l { display: none; }
+  .udp-bar-tools .udp-btn .udp-s { display: inline; }
+  .udp-bar-tools .is-spare { display: none; }
+  .udp-util .udp-spare { display: inline-flex; }
   /* the pace rule runs along the top of the bar instead of taking a row */
   .udp-rule { position: absolute; left: 0; right: 0; top: -4px; margin: 0; }
   .udp-run { order: 2; font-size: 12px; }
@@ -579,6 +585,10 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
   .udp-util { gap: 14px; display: flex; position: static; flex-direction: row; align-items: center; min-width: 0; padding: 0; background: none; border: 0; }
   .udp-util .udp-btn { padding: 0; min-height: 36px; }
   .udp-util [data-act=keys] { display: inline-flex; }
+  .udp-bar-tools .is-spare { display: inline-flex; }
+  .udp-util .udp-spare { display: none; }
+  .udp-bar-tools .udp-btn:has(.udp-s) .udp-l { display: inline; }
+  .udp-bar-tools .udp-btn .udp-s { display: none; }
   .udp-more { display: none; }
   .udp-primary { flex: none; min-height: 36px; padding: 0 18px; max-width: none; }
 
