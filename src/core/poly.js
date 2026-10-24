@@ -33,8 +33,10 @@ export function newell(pts) {
 const centroid = pts => mul(pts.reduce((a, p) => add(a, p), [0, 0, 0]), 1 / pts.length);
 
 // A solid from vertices and face loops. Throws if the faces do not close up
-// into one consistently oriented surface.
-export function solidOf(verts, loops) {
+// into one consistently oriented surface. loose: an edge met by four faces
+// (two blocks touching along it) becomes two edges, paired in the order the
+// faces come, instead of an error.
+export function solidOf(verts, loops, { loose = false } = {}) {
   const faces = loops.map((loop, id) => {
     const pts = loop.map(i => verts[i]), nn = newell(pts);
     return { id, loop, n: unit(nn), area: len(nn) / 2, c: centroid(pts), edges: [] };
@@ -43,12 +45,15 @@ export function solidOf(verts, loops) {
   for (const f of faces) f.loop.forEach((a, k) => {
     const b = f.loop[(k + 1) % f.loop.length], key = Math.min(a, b) + ',' + Math.max(a, b);
     let e = byKey.get(key);
+    const taken = e => a < b ? e.f[0] !== undefined : e.f[1] !== undefined;
+    if (e && taken(e) && loose) e = e.more?.find(x => !taken(x)) || null;
     if (!e) {
       e = { id: edges.length, a: Math.min(a, b), b: Math.max(a, b), f: [], len: len(sub(verts[a], verts[b])) };
-      edges.push(e); byKey.set(key, e);
+      edges.push(e);
+      if (!byKey.has(key)) byKey.set(key, e); else (byKey.get(key).more ||= []).push(e);
     }
     // f[0] walks the edge a -> b, f[1] walks it b -> a
-    if (a < b ? e.f[0] !== undefined : e.f[1] !== undefined) throw new Error('edge ' + key + ' walked twice the same way');
+    if (taken(e)) throw new Error('edge ' + key + ' walked twice the same way');
     e.f[a < b ? 0 : 1] = f.id;
     f.edges[k] = e.id;
   });
@@ -72,7 +77,7 @@ export function solidOf(verts, loops) {
 // stretch of surface has no seam to cut and no hinge that folds by nothing.
 // Points left in the middle of a straight edge (where only two faces meet) go.
 // A group that would not make one simple loop (a ring around a hole) is kept as it was.
-export function mergeFlat(solid) {
+export function mergeFlat(solid, opts) {
   const { faces, edges, verts } = solid;
   if (!edges.some(e => e.flat)) return solid;
   const up = faces.map(f => f.id), find = i => up[i] === i ? i : (up[i] = find(up[i]));
@@ -102,7 +107,7 @@ export function mergeFlat(solid) {
   loops = loops.map(l => l.filter(v => touch[v] > 2));
   const keep = new Map(), nv = [];
   for (const l of loops) for (const v of l) if (!keep.has(v)) { keep.set(v, nv.length); nv.push(verts[v]); }
-  return solidOf(nv, loops.map(l => l.map(v => keep.get(v))));
+  return solidOf(nv, loops.map(l => l.map(v => keep.get(v))), opts);
 }
 
 // Turn or mirror a solid: f maps a vertex to its new place. Loops are reversed

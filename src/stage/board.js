@@ -205,7 +205,8 @@ export function createBoard(container, opts = {}) {
       if (it.kind === 'poly') {
         const fill = FILLS[it.fill] ?? it.fill ?? FILLS.none;
         add('path', { d, fill, stroke: 'none' }, gFill);
-        if (it.stroke) add('path', { d, ...strokeAttrs(it.stroke) }, gLine);
+        // stacked: the outline goes with the fill, so later polygons cover it (a painter's drawing)
+        if (it.stroke) add('path', { d, ...strokeAttrs(it.stroke) }, it.stacked ? gFill : gLine);
       } else add('path', { d, ...strokeAttrs(it.style) }, gLine);
     } else if (it.kind === 'dot') {
       add('circle', { cx: fmt(X(it.p)), cy: fmt(Y(it.p)), r: it.r ?? 2.5, fill: it.signal ? '#ff5a1f' : (it.color || '#e9e6df') }, gPoint);
@@ -419,7 +420,7 @@ export function createBoard(container, opts = {}) {
     // items; every call returns the item id (pass opts.id to replace an item)
     line: (a, b, style = 'visible', io = {}) => put({ kind: 'seg', a, b, style, ...io }),
     polyline: (pts, style = 'visible', io = {}) => put({ kind: 'path', pts, style, ...io }),
-    // polygon: opts.fill ('none' | 'face' | 'ghost' | 'signal' | 'signalStrong' | 'error' | a CSS colour), opts.stroke (a style or null)
+    // polygon: opts.fill ('none' | 'face' | 'ghost' | 'signal' | 'signalStrong' | 'error' | a CSS colour), opts.stroke (a style or null), opts.stacked
     polygon: (pts, io = {}) => put({ kind: 'poly', pts, fill: 'face', stroke: 'visible', ...io }),
     dot: (p, io = {}) => put({ kind: 'dot', p, ...io }),
     text: (p, text, io = {}) => put({ kind: 'text', p, text, ...io }),

@@ -1,0 +1,18 @@
+/* Oblique: the House IV hand, under the drawing in the card */
+.udp-card.ob-moves .udp-card-body { width: min(36vw, 520px); }
+.ob-hand { flex: none; padding-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.ob-slots { display: flex; flex-direction: column; gap: 3px; font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; color: var(--grey2); }
+.ob-slot b { display: inline-block; width: 1.6em; color: var(--grey3); font-weight: 400; }
+.ob-slot.is-full { color: var(--ink); }
+.ob-slot.is-full b { color: var(--signal); }
+.ob-cards { display: flex; flex-wrap: wrap; gap: 6px; }
+.ob-move { font: inherit; font-size: 13px; line-height: 1.25; text-align: left; color: var(--ink); background: transparent; border: 1px solid var(--grey3);
+  padding: 9px 11px; min-height: 40px; cursor: pointer; }
+.ob-move:hover:not([disabled]) { border-color: var(--ink); }
+.ob-move[disabled] { color: var(--grey3); border-color: var(--grey4); cursor: default; }
+.ob-move.is-used { text-decoration: line-through; }
+@media (max-width: 820px) {
+  .udp-card.ob-moves .udp-card-body { width: 100%; }
+  .ob-hand { padding-top: 6px; gap: 6px; }
+  .ob-move { font-size: 12.5px; padding: 7px 9px; min-height: 36px; }
+}

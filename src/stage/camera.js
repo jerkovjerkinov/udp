@@ -392,6 +392,7 @@ export function createCameraRig(host, options = {}) {
     // fn(pointerdown event) -> null (orbit as usual) or { move(ev), end(ev, moved), cancel() }
     setDragHandler(fn) { dragHandler = fn; },
     set orbitEnabled(v) { o.orbit = !!v; },
+    set free(v) { o.free = !!v; },
     set zoomEnabled(v) { o.zoom = !!v; },
     dispose() {
       dom.removeEventListener('pointerdown', onDown);

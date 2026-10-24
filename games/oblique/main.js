@@ -1,8 +1,13 @@
-// Oblique: the other ways of showing a building. Pack A is anamorphosis: a
-// figure painted across a scene so that it is whole from one direction only.
-// The player turns the view (free, no steps) until the pieces close; the card
-// shows the figure and fills as the view comes near. Close enough, the camera
-// settles on the painted view and the sheet is solved.
+// Oblique: the other ways of showing a building.
+//
+//   find    Pack A, anamorphosis: a figure painted across a scene so that it is
+//           whole from one direction only. The player turns the view (free, no
+//           steps) until the pieces close; the card shows the figure and fills
+//           as the view comes near. Close enough, the camera settles on it.
+//   moves   Pack B, House IV: the card draws a building in axonometric; the
+//           player picks moves, in order, that turn a block into it. Each move
+//           plays out on the model, and a solved sheet ends with the whole
+//           series drawn in a row, the way Eisenman drew House IV.
 
 import '../../src/ui/theme.js';
 import * as THREE from 'three';
@@ -13,11 +18,13 @@ import { createSolidView } from '../../src/stage/solids.js';
 import { createFrame } from '../../src/ui/frame.js';
 import { createRedlines } from '../../src/ui/redline.js';
 import { createSession } from '../../src/ui/session.js';
-import { wait } from '../../src/fx/tween.js';
+import { animate, ease, wait } from '../../src/fx/tween.js';
 import { sfx } from '../../src/fx/sfx.js';
 import { PARTS } from '../../src/core/drawforms.js';
 import { viewBasis, viewAngle, paintFigure, figureOf, outlineOf } from '../../src/core/anamorph.js';
-import { triangulate } from '../../src/core/poly.js';
+import { mapSolid } from '../../src/core/poly.js';
+import { applyMove, run, sameForm, boxCells, boundsOf, cellSolid, axonSquares } from '../../src/core/houseiv.js';
+import './oblique.css';
 import { seededRng, pick } from '../../src/core/rand.js';
 import { PACKS } from './levels.js';
 
@@ -33,7 +40,7 @@ const SIGNAL = '#ff5a1f';
 
 const packs = PACKS.map(pk => ({
   ...pk,
-  levels: pk.levels.map(l => ({ ...l, label: `${l.name} · find the view`, par: l.par ?? 45, note: l.learn })),
+  levels: pk.levels.map(l => ({ ...l, label: `${l.name} · ${l.task === 'find' ? 'find the view' : 'moves'}`, par: l.par ?? (l.task === 'find' ? 45 : 30 + l.slots * 20 + l.hand.length * 5), note: l.learn })),
 }));
 
 // ------------------------------------------------------------------
@@ -193,12 +200,173 @@ function findTask(item) {
 }
 
 // ------------------------------------------------------------------
+// task: the moves (House IV)
+// ------------------------------------------------------------------
+
+const AXON = { yaw: -112.5 * D2R, pitch: 28 * D2R };
+const TONES = { top: '#e9e6df', left: '#aaa59c', right: '#78746d' };
+
+// an axonometric of cells on a board, at offset [ox, oy] on the sheet
+function drawAxon(board, cells, prefix, [ox, oy] = [0, 0], { ghost = false } = {}) {
+  const v = viewBasis(AXON.yaw, AXON.pitch);
+  const P = p => [ox + p[0] * v.right[0] + p[1] * v.right[1] + p[2] * v.right[2], oy + p[0] * v.up[0] + p[1] * v.up[1] + p[2] * v.up[2]];
+  axonSquares(cells, v.d).forEach((sq, i) => {
+    const fill = sq.n[2] > 0 ? TONES.top : (sq.n[0] * v.right[0] + sq.n[1] * v.right[1] < 0 ? TONES.left : TONES.right);
+    board.polygon(sq.pts.map(P), { id: prefix + i, fill: ghost ? 'none' : fill, stroke: ghost ? 'guide' : 'visible', stacked: !ghost, hit: false });
+  });
+}
+
+// a unit cell as a plaster block, centred on its own origin so it can turn
+const cellBlock = () => mapSolid(cellSolid([[0, 0, 0]]), ([x, y, z]) => [x - .5, y - .5, z - .5]);
+
+function movesTask(item) {
+  stage.rig.free = false;
+  const start = boxCells(item.start);
+  const goal = run(start, item.answer.map(i => item.hand[i]));
+  let cells = start;
+  const played = [];                    // hand indices, in order
+  const history = [start];              // the form before each move, and after the last
+  let busy = false, done = false;
+
+  // the model: one merged solid at rest
+  let rest = null;
+  function showRest() {
+    rest?.dispose(); rest = null;
+    if (!cells.length) return;
+    rest = createSolidView(cellSolid(cells), { invalidate: stage.invalidate });
+    stage.content.add(rest.group);
+    stage.invalidate();
+  }
+  showRest();
+  const frameAll = () => {
+    const b = boundsOf([...start, ...goal]);
+    stage.frame(new THREE.Box3(new THREE.Vector3(b.lo[0] - 1, b.lo[1] - 1, 0), new THREE.Vector3(b.hi[0] + 2, b.hi[1] + 2, b.hi[2] + 1.5)), { padding: 24 });
+  };
+  stage.rig.setView(AXON.yaw, AXON.pitch, false);
+  frameAll();
+
+  // one move, played out cell by cell
+  async function play(m) {
+    const r = applyMove(cells, m);
+    const blocks = [];
+    const put = (from, to, { fade = false } = {}) => {
+      const v = createSolidView(cellBlock(), { invalidate: stage.invalidate });
+      v.group.position.set(from[0] + .5, from[1] + .5, from[2] + .5);
+      stage.content.add(v.group);
+      blocks.push({ v, from, to, fade });
+    };
+    for (const mv of r.moves) put(mv.from, mv.to);
+    for (const b of r.born) put(b.from, b.to);
+    for (const g of r.gone) put(g, [g[0], g[1], g[2] - 1.2], { fade: true });
+    rest?.dispose(); rest = null;
+    // a turn swings round the old footprint's centre, then settles where the move puts it
+    const { lo, hi } = boundsOf(cells);
+    const C = [(lo[0] + hi[0] + 1) / 2, (lo[1] + hi[1] + 1) / 2];
+    const ang = (r.turn || 0) * Math.PI / 2;
+    const swing = (p, a) => { const x = p[0] + .5 - C[0], y = p[1] + .5 - C[1]; return [C[0] + x * Math.cos(a) - y * Math.sin(a) - .5, C[1] + x * Math.sin(a) + y * Math.cos(a) - .5, p[2]]; };
+    sfx.slide();
+    await animate({ duration: r.turn ? 900 : 620, ease: ease.cubicInOut, essential: true, update: t => {
+      for (const b of blocks) {
+        let p;
+        if (r.turn) {
+          const k = Math.min(1, t * 1.25), sw = swing(b.from, ang * k), end = swing(b.from, ang);
+          const u = Math.max(0, (t - .8) / .2);
+          p = [sw[0] + (b.to[0] - end[0]) * u, sw[1] + (b.to[1] - end[1]) * u, sw[2]];
+          b.v.group.rotation.z = ang * k;
+        } else p = b.from.map((x, i) => x + (b.to[i] - x) * t);
+        b.v.group.position.set(p[0] + .5, p[1] + .5, p[2] + .5);
+        if (b.fade) b.v.group.scale.setScalar(Math.max(.001, 1 - t));
+      }
+      stage.invalidate();
+    } }).promise;
+    for (const b of blocks) b.v.dispose();
+    cells = r.cells;
+    showRest();
+    sfx.thud?.();
+  }
+
+  // the card: the goal drawn, the moves played so far, and the hand
+  const body = frame.card(true, 'The building', 'drawn in axonometric');
+  const cardEl = document.querySelector('.udp-card');
+  cardEl.classList.add('is-plan', 'ob-moves');
+  body.replaceChildren();
+  const holder = document.createElement('div');
+  holder.className = 'rf-board';
+  const hand = document.createElement('div');
+  hand.className = 'ob-hand';
+  body.append(holder, hand);
+  card = createBoard(holder, { unit: 1, sub: 1, grid: 'none', padding: 14 });
+  drawAxon(card, goal, 'g');
+  card.fit();
+  frame.layout();
+
+  function render() {
+    const slots = Array.from({ length: item.slots }, (_, i) => {
+      const m = played[i] !== undefined ? item.hand[played[i]] : null;
+      return `<span class="ob-slot${m ? ' is-full' : ''}"><b>${i + 1}</b>${m ? m.label : '·'}</span>`;
+    }).join('');
+    hand.innerHTML = `<div class="ob-slots">${slots}</div><div class="ob-cards">${item.hand.map((m, i) =>
+      `<button type="button" class="ob-move${played.includes(i) ? ' is-used' : ''}" data-i="${i}"${played.includes(i) || busy || done || played.length >= item.slots ? ' disabled' : ''}>${m.label}</button>`).join('')}</div>`;
+    frame.tool('undo', { off: !played.length || busy || done });
+    frame.sub(`Pick the moves that turn the block into the building on the card, in order. ${item.slots === 1 ? 'One move does it.' : `It takes ${item.slots} moves.`}${item.hand.length > item.slots ? ' Not every move on offer is needed.' : ''} Undo takes the last one back.`);
+  }
+  hand.addEventListener('click', async ev => {
+    const b = ev.target.closest('.ob-move');
+    if (!b || b.disabled || busy || done) return;
+    const i = +b.dataset.i;
+    busy = true; played.push(i); render();
+    try { await play(item.hand[i]); } finally { history.push(cells); busy = false; render(); }
+    if (sameForm(cells, goal)) { done = true; render(); session.check(); }
+    else if (played.length >= item.slots) session.miss({ note: item.ordered ? 'Not this building yet. Try the same moves in another order: undo and play them again.' : 'Not this building yet. Undo a move and try another.' });
+  });
+  async function undo() {
+    if (!played.length || busy || done) return;
+    played.pop(); history.pop();
+    cells = history[history.length - 1];
+    sfx.tick(); showRest(); render();
+  }
+  frame.title('Can you build it?', item.name);
+  frame.tools([
+    { id: 'undo', label: 'Undo', key: 'Z', keys: ['Ctrl+Z'], run: undo },
+    { id: 'hint', label: 'Hint', key: 'H', run: () => session.hint() },
+  ]);
+  frame.primaryEl.style.display = 'none';
+  render();
+  frame.fitSheet(card, { lo: .3, hi: .42 });
+
+  return {
+    check: () => sameForm(cells, goal) ? { ok: true } : { ok: false, note: 'Not this building yet.' },
+    hint(n) {
+      const first = item.hand[item.answer[0]].label;
+      if (n === 1) return { text: item.slots === 1 ? 'Look at the drawing for the part of the block that is missing or has moved.' : `Start with: ${first.toLowerCase()}.` };
+      if (n === 2) return { text: item.slots === 1 ? `It is: ${first.toLowerCase()}.` : `In order: ${item.answer.map(i => item.hand[i].label.toLowerCase()).join(', then ')}.` };
+      return null;
+    },
+    async solved() {
+      // the series, drawn in a row: the block, and the form after every move
+      card.clear();
+      let x = 0;
+      history.forEach((cs, i) => {
+        const b = boundsOf(cs);
+        drawAxon(card, cs, 's' + i + '_', [x, 0]);
+        card.text([x + 1, -2.2], i === 0 ? 'block' : String(i), { id: 'n' + i });
+        x += (b.hi[0] - b.lo[0] + b.hi[1] - b.lo[1] + 2) * 1.05 + 1.2;
+      });
+      card.fit();
+      frame.cardNote('your series');
+      await wait(2600, { essential: true });
+    },
+    dispose() { rest?.dispose(); card?.dispose(); card = null; body.style.height = ''; cardEl.classList.remove('is-plan', 'ob-moves'); frame.card(false); frame.primaryEl.style.display = ''; stage.rig.free = true; },
+  };
+}
+
+// ------------------------------------------------------------------
 // the game definition
 // ------------------------------------------------------------------
 
 let task = null;
 function reset() { task?.dispose(); task = null; red.clear(); stage.clear(); }
-function load(item) { reset(); task = findTask(item); }
+function load(item) { reset(); stage.rig.free = item.task === 'find'; task = item.task === 'moves' ? movesTask(item) : findTask(item); }
 
 // generated: a few blocks and a figure, painted for a random view
 function generate(rng, d) {
