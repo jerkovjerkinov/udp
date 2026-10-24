@@ -1,4 +1,4 @@
-// Drawing Set: three packs, one idea each, on the four beats of the other games:
+// Drawing Set: six packs, one idea each, on the four beats of the other games:
 // introduce the idea (1-2), develop it (3-4), twist it (5-6), a short breather
 // (7) and a showpiece that uses everything (8).
 //
@@ -111,5 +111,23 @@ export const PACKS = [
     L('E7', 'error', 'tee-house', 'front', { cut: 1, errors: 1, kinds: ['pen'], learn: 'A cut line drawn thin, or a line beyond drawn heavy, tells the wrong story about where the plane ran.' }),
     // showpiece: the tower house cut through
     L('E8', 'draw', 'tower-house', 'front', { cut: .5, learn: 'The plane ran through the house and its tower together. One heavy outline holds both, and the roofs rise beyond.' }),
+  ] },
+  { id: 'F', name: 'Whole buildings', brief: 'Bigger buildings, with wings, dormers, passages and towers. Nothing new to learn here: every view uses what the earlier sets taught, only more of it at once.', levels: [
+    // introduce: three wings round a court; two gable ends and the back roof between them
+    L('F1', 'draw', 'courtyard', 'front', { learn: 'The two wings show their gable ends, and between them, further back, the long roof of the back wing.' }),
+    // the same court from above: four valleys where the wings meet the back roof
+    L('F2', 'draw', 'courtyard', 'top', { learn: 'Each wing meets the back roof in two valleys. From above they make a V on either side of the court.' }),
+    // develop: a dormer in the roof, its own small gable
+    L('F3', 'draw', 'dormer-house', 'front', { learn: 'The dormer is a small house of its own, standing in the slope. Its gable rises above the eaves of the big one.' }),
+    // develop, harder: the dormer's side worked out from front and top
+    L('F4', 'third', 'dormer-house', 'right', { given: ['front', 'top'], learn: 'From the side the dormer is a step in the slope: its roof runs back until it meets the main roof.' }),
+    // twist: a passage through the gatehouse, out of sight from the side
+    L('F5', 'draw', 'portal', 'right', { hidden: true, learn: 'From the side the passage is hidden behind the wall, but it is there: one dashed line marks its top.' }),
+    // twist, harder: the church from the side, three lines to find
+    L('F6', 'complete', 'cross-church', 'right', { missing: 3, learn: 'The transept comes towards you, the nave runs away from you, and the tower rises where they cross.' }),
+    // breather: a terrace drawing with one line in the wrong pen
+    L('F7', 'error', 'terrace', 'right', { hidden: true, errors: 1, kinds: ['pen'], learn: 'The low terrace stands in front and hides the foot of the taller ones behind it, so those edges are dashed.' }),
+    // showpiece: the church cut through its nave, the crossing beyond
+    L('F8', 'draw', 'cross-church', 'front', { cut: 2, learn: 'The plane cut the nave alone. Beyond it the transept reaches out on both sides and the tower rises over the crossing, all in the thin pen.' }),
   ] },
 ];

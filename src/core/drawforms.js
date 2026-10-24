@@ -67,6 +67,12 @@ export const DRAW_FORMS = {
   'shed-block': { name: 'Mono-pitch block', make: () => [shedX(0, 0, 4, 2, 1, 2)] },
   chapel: { name: 'Chapel with a bell tower', make: () => [gableY(0, 1, 2, 3, 1.5, 2.5), box(.5, 0, 0, 1, 1, 3), pyramidOn(.5, 0, 1, 1, 3, 1)] },
   basilica: { name: 'Basilica', make: () => [gableY(1, 0, 2, 4, 2.5, 3.5), sectionY(0, [[0, 0], [1, 0], [1, 1.5], [0, 1]], 4), sectionY(3, [[0, 0], [1, 0], [1, 1], [0, 1.5]], 4)] },
+  // bigger buildings, for pack F
+  courtyard: { name: 'Courtyard house', make: () => [gableX(0, 2, 6, 2, 1, 2), gableY(0, 0, 2, 3, 1, 2), gableY(4, 0, 2, 3, 1, 2)] },
+  'dormer-house': { name: 'House with a wall dormer', make: () => [gableX(0, 0, 4, 3, 1.5, 3), gableY(1.5, 0, 1, 1.5, 2, 2.5)] },
+  portal: { name: 'Gatehouse', make: () => [box(0, 0, 0, 1, 2, 2), box(2, 0, 0, 1, 2, 2), at(gableX(0, 0, 3, 2, .5, 1.5), [0, 0, 2])] },
+  'cross-church': { name: 'Church with a crossing tower', make: () => [gableY(1, 0, 2, 6, 2, 3), gableX(0, 3, 4, 2, 2, 3), box(1.5, 3.5, 0, 1, 1, 4), pyramidOn(1.5, 3.5, 1, 1, 4, 1)] },
+  terrace: { name: 'Stepped terrace', make: () => [box(0, 1, 0, 2, 2, 3), box(2, .5, 0, 2, 2.5, 2), box(4, 0, 0, 2, 3, 1)] },
 };
 
 export const drawForm = key => DRAW_FORMS[key].make();
