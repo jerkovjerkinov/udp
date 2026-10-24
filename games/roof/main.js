@@ -224,9 +224,11 @@ function whichTask(item, roof) {
   }
   const opts = shuffle(rng, [{ lines: right, ok: true }, ...wrong.map(lines => ({ lines, ok: false, why: lines.find(l => l.wrong) }))]);
   const W = roof.w * S, H = roof.h * S;
-  const tall = H > W * 1.05;
-  const off = i => tall ? [i * (W + 3), 0] : [0, i * (H + 3.4)];
   const board = openCard('Three plans', 'one is right');
+  // a row or a column, whichever draws the plans larger on this card
+  const bw = board.el.clientWidth || 1, bh = board.el.clientHeight || 1;
+  const tall = board.el.clientWidth ? Math.min(bw / (3 * W + 6), bh / (H + 2)) > Math.min(bw / (W + 2.4), bh / (3 * H + 6.8)) : H > W * 1.05;
+  const off = i => tall ? [i * (W + 3), 0] : [0, i * (H + 3.4)];
   opts.forEach((o, i) => {
     o.off = off(i);
     board.polygon([o.off, add2(o.off, [W, 0]), add2(o.off, [W, H]), add2(o.off, [0, H])], { fill: 'none', stroke: null, id: 'opt' + i, opt: i });

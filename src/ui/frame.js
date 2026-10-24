@@ -14,6 +14,7 @@
 //   frame.primary({ label: 'Unfold', run: check });
 
 import { sfx } from '../fx/sfx.js';
+import { guardTouch } from './touchguard.js';
 
 const h = (tag, cls, html) => {
   const e = document.createElement(tag);
@@ -49,6 +50,7 @@ export const touchWords = t => touch
 
 export function createFrame({ game, name, stage, hubHref = '../../index.html' }) {
   document.body.classList.add('udp-app-page');
+  guardTouch();
   const root = h('div', 'udp-frame');
 
   const head = h('header', 'udp-head');
