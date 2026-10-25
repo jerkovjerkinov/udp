@@ -138,7 +138,15 @@ function drawHeights(board, solids, parts) {
 }
 
 // north, and (for the classic sun) the light in plan
-function drawNorth(board, [[x0, y0], [x1, y1]], { classic = false } = {}) {
+// and a scale bar: one square of the plan is one module, the unit of every height
+function drawScale(board, at, above = false) {
+  board.line(at, [at[0] + 1, at[1]], 'visible', { id: 'sb', hit: false, noFit: true });
+  board.line([at[0], at[1] - .12], [at[0], at[1] + .12], 'visible', { id: 'sb0', hit: false, noFit: true });
+  board.line([at[0] + 1, at[1] - .12], [at[0] + 1, at[1] + .12], 'visible', { id: 'sb1', hit: false, noFit: true });
+  board.text([at[0] + .5, at[1] + (above ? .3 : -.35)], '1 module', { id: 'sbl', noFit: true });
+}
+function drawNorth(board, [[x0, y0], [x1, y1]], { classic = false, scale = 'right' } = {}) {
+  if (scale === 'left') drawScale(board, [x0 + .4, y1 - .45], true); else drawScale(board, [x1 - 1.5, y0 + .5]);
   const p = [x1 - .5, y1 - 1.4];
   board.line(p, [p[0], p[1] + .9], 'guide', { id: 'n-arrow', hit: false, noFit: true });
   board.text([p[0], p[1] + 1.25], 'N', { id: 'n-label', noFit: true });
@@ -171,12 +179,6 @@ function castTask(item) {
   board.polygon([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], { id: 'site', fill: 'none', stroke: null, hit: false });
   drawPlan(board, site.solids);
   drawHeights(board, site.solids, site.parts);
-  // a scale bar: one square is one module, the unit of the heights
-  const sb = [x1 - 1.5, y0 + .5];
-  board.line(sb, [sb[0] + 1, sb[1]], 'visible', { id: 'sb', hit: false, noFit: true });
-  board.line([sb[0], sb[1] - .12], [sb[0], sb[1] + .12], 'visible', { id: 'sb0', hit: false, noFit: true });
-  board.line([sb[0] + 1, sb[1] - .12], [sb[0] + 1, sb[1] + .12], 'visible', { id: 'sb1', hit: false, noFit: true });
-  board.text([sb[0] + .5, sb[1] - .35], '1 module', { id: 'sbl', noFit: true });
   drawNorth(board, plan, { classic: true });
   board.fit();
   frame.fitSheet(board, { lo: .3, hi: .46 });
@@ -317,11 +319,12 @@ function hourTask(item) {
   // the card: the shadows as they should be, and as they are now
   const { board, body } = openCard('Shadow plan', 'at one moment');
   const [[x0, y0], [x1, y1]] = plan;
-  board.setGrid('dots', { x0, y0, x1, y1 });
+  board.setGrid('modules', { x0, y0, x1, y1 });
   board.polygon([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], { id: 'site', fill: 'none', stroke: null, hit: false });
   const goalMask = darkMask(site.parts, goal, plan, .1);
   shadeRuns(board, goalMask, 'g', SHADE);
   drawPlan(board, site.solids);
+  drawHeights(board, site.solids, site.parts);
   drawNorth(board, plan);
 
   // the controls: a day bar to drag the sun along, and the seasons
@@ -509,7 +512,7 @@ function fenceTask(item) {
 
   // the card: the plan, the swept shadows, the floors
   const { board, body } = openCard('Site plan', `sun owed ${clock(item.from)}–${clock(item.to)}`, { interactive: true });
-  board.setGrid('dots', { x0: plan[0][0], y0: plan[0][1], x1: plan[1][0], y1: plan[1][1] });
+  board.setGrid('modules', { x0: plan[0][0], y0: plan[0][1], x1: plan[1][0], y1: plan[1][1] });
   board.polygon(rect([plan[0][0], plan[0][1], plan[1][0], plan[1][1]]), { id: 'site', fill: 'none', stroke: null, hit: false });
   gardens.forEach((g, i) => board.polygon(g, { id: 'gd' + i, fill: 'rgba(255, 90, 31, .07)', stroke: 'signalThin', hit: false }));
   const gardenMask = unionMask(gardens, plan, .1);
@@ -621,7 +624,7 @@ function fenceTask(item) {
     caps,
     check: () => !bad && total() >= goal ? { ok: true } : { ok: false, note: bad ? 'A shadow lands in a garden: take the orange floors off.' : `${goal - total()} more floors fit in the light.` },
     hint(n) {
-      if (n === 1) return { text: `A floor one module high throws a shadow ${reach(item.from).toFixed(1)} modules long at ${clock(item.from)} and ${reach(12).toFixed(1)} at noon. Count the modules from each plot to the garden, along the shadows: that is how high it can go.` };
+      if (n === 1) return { text: `A floor one module high throws a shadow ${reach(item.from).toFixed(1)} modules long at ${clock(item.from)} and ${reach(12).toFixed(1)} at noon. One square of the plan is one module and one floor is one module high. Count the squares from each plot to the garden, along the shadows: that is how high it can go.` };
       if (n === 2) {
         // build one plot, the tallest, to its limit
         const i = caps.indexOf(Math.max(...caps));
@@ -660,7 +663,7 @@ function fenceTask(item) {
 
 const WALL = .12;                       // wall thickness, outside the room
 const CUT = .35;                        // near walls, cut down so the room can be seen into
-const GAP = .3;                         // between the plan and the folded-out plane
+const GAP = 0;                          // the folded-out plane hinges on the plan's edge, on the module grid
 // the camera looks at the opening from inside the room, over the near walls
 const LOOK = { south: { yaw: 67.5, near: ['north', 'east'] }, east: { yaw: 202.5, near: ['west', 'south'] }, west: { yaw: -22.5, near: ['east', 'south'] }, roof: { yaw: -112.5, near: ['south', 'west'] } };
 const PLANE_NAMES = { south: 'south wall', east: 'east wall', west: 'west wall', roof: 'roof' };
@@ -782,7 +785,7 @@ function lightTask(item) {
   const corners = [fold(0, 0), fold(pu, 0), fold(pu, pv), fold(0, pv)];
   const xs = [0, W, ...corners.map(p => p[0])], ys = [0, D, ...corners.map(p => p[1])];
   const sheet = [[Math.floor(Math.min(...xs) - .5), Math.floor(Math.min(...ys) - .5)], [Math.ceil(Math.max(...xs) + .5), Math.ceil(Math.max(...ys) + .5)]];
-  board.setGrid('dots', { x0: sheet[0][0], y0: sheet[0][1], x1: sheet[1][0], y1: sheet[1][1] });
+  board.setGrid('modules', { x0: sheet[0][0], y0: sheet[0][1], x1: sheet[1][0], y1: sheet[1][1] });
   board.polygon(rect([sheet[0][0], sheet[0][1], sheet[1][0], sheet[1][1]]), { id: 'site', fill: 'none', stroke: null, hit: false });
   goals.forEach((g, i) => {
     const loops = g.rect ? [rect(g.rect)] : outlineOf(g.target, { tol: .04 });
@@ -795,7 +798,13 @@ function lightTask(item) {
   for (const [ex, ey, ez, ew, ed, eh] of item.eaves || []) if (item.plane === 'south') board.line(fold(ex, ez), fold(ex + ew, ez), 'hidden', { id: 'eave', hit: false });
   // the plane's name: under a folded wall's top, or over the roof (east and west walls: past their north end)
   board.text(item.plane === 'east' || item.plane === 'west' ? fold(pu + .35, pv / 2) : fold(pu / 2, pv + .35), PLANE_NAMES[item.plane], { id: 'pln', noFit: true });
-  drawNorth(board, sheet);
+  drawNorth(board, sheet, { scale: 'left' });
+  // the folded wall's heights, a mark at every module, and module lines across its cells
+  if (item.plane !== 'roof') for (let v = 1; v <= pv + 1e-9; v++) {
+    board.text(fold(-.32, v), heightText(v), { id: 'pv' + v, noFit: true });
+  }
+  for (let u = 1; u < pu - 1e-9; u++) board.line(fold(u, 0), fold(u, pv), 'visible', { id: 'pmu' + u, hit: false, noFit: true });
+  for (let v = 1; v < pv - 1e-9; v++) board.line(fold(0, v), fold(pu, v), 'visible', { id: 'pmv' + v, hit: false, noFit: true });
   const cellPoly = k => { const a = k % nu, b = Math.floor(k / nu); return [fold(a * cell, b * cell), fold((a + 1) * cell, b * cell), fold((a + 1) * cell, (b + 1) * cell), fold(a * cell, (b + 1) * cell)]; };
 
   // the moments, if more than one: which one the model shows
@@ -809,7 +818,7 @@ function lightTask(item) {
     clearRuns(board, 'lt'); clearRuns(board, 'lk');
     goals.forEach((g, i) => shadeRuns(board, litMask(g.map, open), `lt${i}-`, NOW));
     avoid.forEach((a, i) => shadeRuns(board, litMask(a.map, open), `lk${i}-`, 'rgba(255, 90, 31, .7)'));
-    for (let k = 0; k < nu * nv; k++) board.polygon(cellPoly(k), { id: 'cl' + k, fill: open.has(k) ? 'rgba(255, 214, 170, .9)' : 'rgba(233, 230, 223, .1)', stroke: open.has(k) ? 'signalThin' : 'visible', hit: false });
+    for (let k = 0; k < nu * nv; k++) board.polygon(cellPoly(k), { id: 'cl' + k, fill: open.has(k) ? 'rgba(255, 214, 170, .9)' : 'rgba(233, 230, 223, .1)', stroke: open.has(k) ? 'signalThin' : 'guide', hit: false });
   }
   function show() {
     const m = moments[shown], s = sunDir(LAT, m.season, m.hour);
@@ -870,8 +879,8 @@ function lightTask(item) {
     hint(n) {
       const s = sunDir(LAT, first.season, first.hour), up = altitude(s), k = 1 / Math.tan(up * D2R);
       if (n === 1) return { text: item.plane === 'roof'
-        ? `At ${clock(first.hour)} the sun is ${Math.round(up)}° up, so light through the roof lands ${(k * H).toFixed(1)} modules away from the sun. Find the mark, and look back toward the sun from it.`
-        : `At ${clock(first.hour)} the sun is ${Math.round(up)}° up: light through a cell one module up the wall lands ${k.toFixed(1)} modules into the room. The higher the cell, the deeper its patch.` };
+        ? `At ${clock(first.hour)} the sun is ${Math.round(up)}° up, so light through the roof lands ${(k * H).toFixed(1)} squares away from the sun. Find the mark, and look back toward the sun from it.`
+        : `At ${clock(first.hour)} the sun is ${Math.round(up)}° up: light through a cell one module up the wall (the +1 mark) lands ${k.toFixed(1)} squares into the room. The higher the cell, the deeper its patch.` };
       if (n === 2) {
         const k0 = best.find(c => !open.has(c));
         if (k0 !== undefined) toggle(k0);
