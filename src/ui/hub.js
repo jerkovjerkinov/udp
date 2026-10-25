@@ -1,8 +1,8 @@
-// The hub: eight games in three families, each with a small plaster model that
+// The hub: nine games in three families, each with a small plaster model that
 // turns slowly under the pointer, today's daily sheet and the streak.
 //
-// One WebGL renderer draws every card's model into its own scissor rect on a
-// fixed canvas behind the page, so eight models cost one context.
+// One WebGL renderer, off screen, draws every card's model and copies it into
+// the card's own canvas, so nine models cost one context.
 
 import * as THREE from 'three';
 import { createSolidView } from '../stage/solids.js';
@@ -22,17 +22,18 @@ import { loadProgress, loadSuite, today, currentStreak, dailyGame } from './prog
 export const GAMES = [
   { id: 'fold', prefix: 'F', family: 'Sheet', name: 'Fold & Punch', blurb: 'Fold a sheet, punch or cut it, and say where the holes land when it opens.', ready: true },
   { id: 'origamic', prefix: 'O', family: 'Sheet', name: 'Origamic', blurb: 'Cut and crease one sheet so that it stands up as a building when the card opens.', ready: true },
-  { id: 'developments', prefix: 'D', family: 'Solid', name: 'Developments', blurb: 'Cut solids open into flat nets, find the edges that glue together, and fold nets in your head.', ready: true },
-  { id: 'stack', prefix: 'S', family: 'Solid', name: 'Stack', blurb: 'Stack housing on a site so every home is held up, gets daylight, keeps some open roof and has a way in.', ready: true },
-  { id: 'drawing', prefix: 'A', family: 'Building', name: 'Drawing Set', blurb: 'Draw a building as it looks from the front, the side and above, and work out a building from its drawings.', ready: true },
+  { id: 'developments', prefix: 'D', family: 'Sheet', name: 'Developments', blurb: 'Cut solids open into flat nets, find the edges that glue together, and fold nets in your head.', ready: true },
+  { id: 'drawing', prefix: 'A', family: 'Drawing', name: 'Drawing Set', blurb: 'Draw a building as it looks from the front, the side and above, and work out a building from its drawings.', ready: true },
+  { id: 'oblique', prefix: 'V', family: 'Drawing', name: 'Oblique', blurb: 'Other ways of showing a building: find the one view a figure was painted for, and the moves that turn a block into a house.', ready: true },
+  { id: 'sunstudy', prefix: 'L', family: 'Drawing', name: 'Sun Study', blurb: 'Move the sun and read the shadow: draw a shadow the way architects learn to, then find the hour and season a shadow plan shows.', ready: true },
+  { id: 'stack', prefix: 'S', family: 'Building', name: 'Stack', blurb: 'Stack housing on a site so every home is held up, gets daylight, keeps some open roof and has a way in.', ready: true },
   { id: 'roof', prefix: 'R', family: 'Building', name: 'Roof Plans', blurb: 'Grow roofs from footprints, read hips and valleys, and drain the rain.', ready: true },
-  { id: 'oblique', prefix: 'V', family: 'Building', name: 'Oblique', blurb: 'The other ways of showing a building: find the one view a figure was painted for, and more to come.', ready: true },
   { id: 'buildorder', prefix: 'B', family: 'Building', name: 'Build Order', blurb: 'Take a building apart and put it back together under real gravity. Pull the wrong block and it comes down.', ready: true },
 ];
 const FAMILIES = [
-  { id: 'Sheet', note: 'paper: folds, cuts, creases' },
-  { id: 'Solid', note: 'volumes: nets, views, blocks' },
-  { id: 'Building', note: 'architecture: drawn and built' },
+  { id: 'Sheet', note: 'paper: folds, cuts, nets' },
+  { id: 'Drawing', note: 'ways of showing: views, light' },
+  { id: 'Building', note: 'architecture: built and stacked' },
 ];
 
 // ------------------------------------------------------------------
@@ -70,6 +71,8 @@ const MODELS = {
   drawing: () => drawForm('cross-house'),
   // two walls at two depths: an anamorphic figure lives across them
   oblique: () => [box(0, 0, 0, 2.4, .3, 1.8), box(.6, 1.6, 0, 2.4, .3, 2.6)],
+  // an obelisk and a low block: a sundial's shadow
+  sunstudy: () => [box(0, 0, 0, .5, .5, 3), box(1.2, -.6, 0, 1.6, 1.6, .8)],
   // a two-storey frame: columns, slabs and a stair core
   buildorder: () => {
     const out = [box(0, 0, 0, 3, 2, .12), box(0, 0, 1.2, 3, 2, .12), box(0, 0, 2.4, 3, 2, .12)];
@@ -142,8 +145,8 @@ export function createHub(root) {
   root.innerHTML = `<div class="udp-hub">
     <div class="udp-hub-top">
       <div><nav class="udp-brand"><span class="udp-long">Unnamed Drawing Project</span><span class="udp-sep udp-long">·</span><span>Index of sheets</span></nav>
-        <h1 class="udp-hub-title">Eight drawings to think in.<b>Unnamed Drawing Project</b></h1>
-        <p class="udp-hub-sub">Spatial puzzles for architects: nets, elevations, roofs, pop-ups, the order things are built in and the views a figure is painted for. Every sheet asks you to see a form before you touch it.</p></div>
+        <h1 class="udp-hub-title">Nine drawings to think in.<b>Unnamed Drawing Project</b></h1>
+        <p class="udp-hub-sub">Spatial puzzles for architects: nets, elevations, roofs, pop-ups, the order things are built in, the views a figure is painted for and the shadows the sun throws. Every sheet asks you to see a form before you touch it.</p></div>
       <a class="udp-hub-daily" href="games/${daily}/index.html#daily=${date}">
         <span>Daily sheet · ${date}</span>
         <div class="udp-big" style="text-transform:none">${dailyDone ? 'Drawn' : GAMES.find(g => g.id === daily).name}</div>

@@ -66,7 +66,7 @@ function groundMaterial() {
  * createStage(container, opts)
  *   opts.camera    options for the camera rig (yaw, pitch, snap, ...)
  *   opts.ground    false to drop the ground plane
- *   opts.maxPixelRatio (2), opts.shadowMap (4096), opts.preserveDrawingBuffer (false)
+ *   opts.maxPixelRatio (2), opts.shadowMap (4096), opts.preserveDrawingBuffer (false), opts.longShadows (false)
  */
 export function createStage(container, opts = {}) {
   const renderer = new THREE.WebGLRenderer({
@@ -168,7 +168,8 @@ export function createStage(container, opts = {}) {
     sun.target.position.copy(c);
     sun.target.updateMatrixWorld();
     const cam = sun.shadow.camera;
-    const m = r * 1.04 + .1;
+    // a low sun throws shadows far past the content: widen the map to hold them
+    const m = r * 1.04 + .1 + (opts.longShadows ? throwLen * Math.cos(elev) : 0);
     cam.left = -m; cam.right = m; cam.top = m; cam.bottom = -m;
     cam.near = .1; cam.far = 2 * r + 4 + throwLen * 1.2;
     cam.updateProjectionMatrix();
@@ -212,6 +213,9 @@ export function createStage(container, opts = {}) {
       if (!same) rig.reframe({ animate });
     },
     get rect() { return rect(); },
+    // turn the key light: d points toward the sun (z up)
+    setSun(d) { sunDir.set(d[0], d[1], d[2]).normalize(); invalidate(); },
+    get sunDir() { return sunDir.toArray(); },
     frame: (what, o) => rig.frame(what ?? content, o),
     frameTurn: (what, n, o) => rig.frameTurn(what, n, o),
     victoryOrbit: o => rig.victoryOrbit(o),

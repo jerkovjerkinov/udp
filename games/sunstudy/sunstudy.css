@@ -1,0 +1,26 @@
+/* Sun Study: the day bar and the seasons, under the shadow plan in the card */
+.udp-card.ss-card .udp-card-body { width: min(34vw, 500px); }
+.ss-ctl { flex: none; padding-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.ss-read { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.ss-clock { font-family: var(--f-mono); font-size: 22px; letter-spacing: .02em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ss-clock em { font-style: normal; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--grey2); margin-left: 8px; }
+.ss-match { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--grey2); white-space: nowrap; }
+.ss-match.is-near { color: var(--signal); }
+/* a fat track, so a thumb can hold the sun */
+.ss-track { position: relative; height: 44px; touch-action: none; cursor: ew-resize; }
+.ss-track::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--grey3); }
+.ss-noon { position: absolute; top: 50%; width: 1px; height: 12px; margin-top: -6px; background: var(--grey3); }
+.ss-knob { position: absolute; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 0 6px rgba(255, 90, 31, .18); }
+.ss-day.is-fixed .ss-track { opacity: .35; cursor: default; }
+.ss-ends { display: flex; justify-content: space-between; font-family: var(--f-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--grey3); margin-top: -6px; }
+.ss-seasons { display: flex; gap: 6px; }
+.ss-season { flex: 1; font-size: 13px; color: var(--ink); border: 1px solid var(--grey3); padding: 8px 6px; min-height: 40px; }
+.ss-season.is-on { border-color: var(--signal); color: var(--signal); }
+.ss-season[disabled] { color: var(--grey4); border-color: var(--grey4); cursor: default; }
+@media (max-width: 820px) {
+  .udp-card.ss-card .udp-card-body { width: 100%; }
+  .ss-ctl { padding-top: 4px; gap: 4px; }
+  .ss-clock { font-size: 18px; }
+  .ss-track { height: 40px; }
+  .ss-season { font-size: 12.5px; padding: 6px 4px; min-height: 36px; }
+}
