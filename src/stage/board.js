@@ -42,7 +42,7 @@ const fmt = n => (Math.round(n * 10) / 10).toString();
  * createBoard(container, opts)
  *   unit (1)        lattice spacing in sheet units
  *   sub (1)         sub-lattice divisions (2 = the x2 lattice)
- *   grid ('dots')   'lines' | 'dots' | 'none'
+ *   grid ('dots')   'lines' | 'dots' | 'modules' (unit squares, dots between) | 'none'
  *   gridBounds      { x0, y0, x1, y1 } sheet units; default: the fitted view
  *   padding (16)    px around fitted content
  *   interactive     crosshair cursor and pointer handling
@@ -179,6 +179,14 @@ export function createBoard(container, opts = {}) {
       for (let j = j0; j <= j1; j++) { const y = fmt(Y([0, j * step])); const seg = `M${fmt(X([b.x0, 0]))} ${y}H${fmt(X([b.x1, 0]))}`; if (major(j)) dMaj += seg; else dMin += seg; }
       mk('path', { d: dMin, stroke: '#4a4843', 'stroke-width': .5, 'stroke-opacity': .45, fill: 'none' }, gGrid);
       mk('path', { d: dMaj, stroke: '#4a4843', 'stroke-width': .75, 'stroke-opacity': .8, fill: 'none' }, gGrid);
+    } else if (o.grid === 'modules') {
+      // the unit squares drawn, so a module reads at a glance; the sub-lattice as dots
+      let dMaj = '', dMin = '';
+      for (let i = i0; i <= i1; i++) if (major(i)) dMaj += `M${fmt(X([i * step, 0]))} ${fmt(Y([0, b.y0]))}V${fmt(Y([0, b.y1]))}`;
+      for (let j = j0; j <= j1; j++) if (major(j)) dMaj += `M${fmt(X([b.x0, 0]))} ${fmt(Y([0, j * step]))}H${fmt(X([b.x1, 0]))}`;
+      for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) if (!(major(i) && major(j))) dMin += `M${fmt(X([i * step, 0]))} ${fmt(Y([0, j * step]))}h.01`;
+      mk('path', { d: dMaj, stroke: '#5a5852', 'stroke-width': .75, 'stroke-opacity': .9, fill: 'none' }, gGrid);
+      mk('path', { d: dMin, stroke: '#5a5852', 'stroke-width': 1.6, 'stroke-linecap': 'round', fill: 'none' }, gGrid);
     } else {
       // lattice points: small crosses on the unit lattice, dots on the sub-lattice
       let dMaj = '', dMin = '';

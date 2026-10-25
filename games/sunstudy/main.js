@@ -167,10 +167,16 @@ function castTask(item) {
 
   const { board } = openCard('Site plan', 'draw the shadow', { interactive: true });
   const [[x0, y0], [x1, y1]] = plan;
-  board.setGrid('dots', { x0, y0, x1, y1 });
+  board.setGrid('modules', { x0, y0, x1, y1 });
   board.polygon([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], { id: 'site', fill: 'none', stroke: null, hit: false });
   drawPlan(board, site.solids);
   drawHeights(board, site.solids, site.parts);
+  // a scale bar: one square is one module, the unit of the heights
+  const sb = [x1 - 1.5, y0 + .5];
+  board.line(sb, [sb[0] + 1, sb[1]], 'visible', { id: 'sb', hit: false, noFit: true });
+  board.line([sb[0], sb[1] - .12], [sb[0], sb[1] + .12], 'visible', { id: 'sb0', hit: false, noFit: true });
+  board.line([sb[0] + 1, sb[1] - .12], [sb[0] + 1, sb[1] + .12], 'visible', { id: 'sb1', hit: false, noFit: true });
+  board.text([sb[0] + .5, sb[1] - .35], '1 module', { id: 'sbl', noFit: true });
   drawNorth(board, plan, { classic: true });
   board.fit();
   frame.fitSheet(board, { lo: .3, hi: .46 });
@@ -215,7 +221,7 @@ function castTask(item) {
   function clear() { if (done) return; closed.length = 0; cur = []; undoStack.length = 0; clearRuns(board, 'df'); draw(); }
 
   frame.title('Can you draw its shadow?', item.name);
-  frame.sub('The light comes over your left shoulder at 45°, as on a drawing board, so every shadow falls north-east by the height that casts it. The numbers on the plan are heights in modules, and the model has a line at every module. Tap from dot to dot round the shadow on the plan, and tap the first dot again to close it. Then press Cast.');
+  frame.sub('The light comes over your left shoulder at 45°, as on a drawing board, so every shadow falls north-east by the height that casts it. The numbers on the plan are heights in modules: one square of the plan is one module, and the model has a line at every module. A block +1 high throws its shadow one square north and one square east. Tap from dot to dot round the shadow on the plan, and tap the first dot again to close it. Then press Cast.');
   frame.tools([
     { id: 'undo', label: 'Undo', key: 'Z', keys: ['Ctrl+Z'], run: undo },
     { id: 'clear', label: 'Clear', key: 'X', run: clear, spare: true },
@@ -244,7 +250,7 @@ function castTask(item) {
       return { ok: false, note: `${note} (${Math.round(o * 100)}% matches.)` };
     },
     hint(n) {
-      if (n === 1) return { text: 'Read the heights on the plan, then push every top corner north-east by its own height: one module up, one module north and one east. Then join those points to the foot of the walls that throw them.' };
+      if (n === 1) return { text: 'Read the heights on the plan, then push every top corner north-east by its own height: one module up, one square north and one square east (two dots, not one). Then join those points to the foot of the walls that throw them.' };
       if (n === 2) {
         // the shadow of every top corner, on the ground
         let k = 0;
