@@ -1,5 +1,5 @@
 // node tests/core/sun.test.mjs — Sun Study: the sun, and the shadows it leaves
-import { sunDir, dayOf, altitude, CLASSIC, partOf, darkAt, darkMask, polyMask, overlap, runsOf, siteBox, topAt, SEASONS } from '../../src/core/sun.js';
+import { sunDir, dayOf, altitude, CLASSIC, partOf, darkAt, darkMask, polyMask, overlap, runsOf, siteBox, topAt, SEASONS, columnShadow, convexMeet, windowSuns, envelopeOf, shadesAt, unionMask, hullOf } from '../../src/core/sun.js';
 import { PARTS } from '../../src/core/drawforms.js';
 import { PACKS } from '../../games/sunstudy/levels.js';
 
@@ -48,8 +48,36 @@ ok(overlap(m, polyMask([[[2, 0], [3, 1], [3, 3]]], box, .05)) < .5, 'half a shad
 const back = polyMask(runsOf(m).map(([[a, b], [c, d]]) => [[a, b], [c, b], [c, d], [a, d]]), box, .05);
 ok(overlap(m, back) === 1, 'a mask’s own runs draw it exactly');
 
+// the solar envelope
+const sq = hullOf([[0, 0], [1, 0], [1, 1], [0, 1], [.5, .5]]);
+ok(sq.length === 4, 'a hull drops inner points');
+const noonCol = columnShadow([0, 0, 1, 1], 2, 0, noonEq);
+ok(noonCol && near(Math.max(...noonCol.map(p => p[1])), 1 + 2 / Math.tan(49 * Math.PI / 180), 1e-6), 'a column’s noon shadow reaches h / tan(alt) north');
+ok(columnShadow([0, 0, 1, 1], 1, 1, noonEq) === null, 'a column below the fence throws nothing on it');
+ok(convexMeet([[0, 0], [2, 0], [2, 2], [0, 2]], [[1, 1], [3, 1], [3, 3], [1, 3]]) && !convexMeet([[0, 0], [1, 0], [1, 1], [0, 1]], [[1, 0], [2, 0], [2, 1], [1, 1]]), 'polygons meet by area, not by a shared edge');
+ok(windowSuns('equinox', 9, 15).length === 25, 'the owed hours, every quarter hour');
+const rectOf = ([a, b, c, d]) => [[a, b], [c, b], [c, d], [a, d]];
+
 // the levels
 for (const pk of PACKS) for (const l of pk.levels) {
+  if (l.task === 'fence') {
+    const gardens = l.gardens.map(rectOf), suns = windowSuns(l.season, l.from, l.to);
+    const caps = envelopeOf(l.plots, l.zf, gardens, suns);
+    ok(caps.reduce((a, b) => a + b, 0) >= 3, `${l.id}: floors to build (${caps})`);
+    ok(caps.every(c => c < 12), `${l.id}: every plot is held down by the light (${caps})`);
+    // the cap is exact: one floor more shades a garden, and nothing below it does
+    l.plots.forEach((p, i) => {
+      ok(shadesAt(p, caps[i] + 1, l.zf, gardens, suns) !== null, `${l.id}: plot ${i} one floor over its cap shades a garden`);
+      ok(caps[i] === 0 || shadesAt(p, caps[i], l.zf, gardens, suns) === null, `${l.id}: plot ${i} at its cap keeps the gardens in sun`);
+    });
+    // and the sampled sweep agrees: at the caps no swept shadow lies in a garden
+    const box = [[-8, -4], [16, 18]];
+    const sweep = unionMask(l.plots.flatMap((p, i) => suns.map(({ sun }) => columnShadow(p, caps[i], l.zf, sun))), box, .1);
+    const gm = unionMask(gardens, box, .1);
+    ok(!sweep.bits.some((v, k) => v && gm.bits[k]), `${l.id}: the swept shadow stays out of the gardens`);
+    ok(new Set(l.plots.map(p => p.join())).size === l.plots.length && l.plots.every(p => gardens.every(g => !convexMeet(rectOf([p[0], p[1], p[0] + p[2], p[1] + p[3]]), g))), `${l.id}: plots are distinct and off the gardens`);
+    continue;
+  }
   const parts = build(l.parts);
   if (l.task === 'cast') {
     const b = siteBox(parts, [CLASSIC]);

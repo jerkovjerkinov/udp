@@ -7,6 +7,9 @@
 //   hour    Pack B, the real sun over Istanbul: the card shows a shadow plan,
 //           the player drags the sun through the day and picks the season until
 //           the shadows on the site are the ones on the card.
+//   fence   Pack C, the solar envelope: tap plots on the plan to add floors;
+//           the shadows swept through the owed hours must stay out of every
+//           garden. The most floors the light allows is the answer.
 //
 // Both grade by plan masks (sun.js): which plan points are dark, sampled on a
 // grid, compared as intersection over union.
@@ -16,6 +19,7 @@ import * as THREE from 'three';
 import { createStage } from '../../src/stage/stage.js';
 import { createBoard } from '../../src/stage/board.js';
 import { createLines } from '../../src/stage/lines.js';
+import { createLabels } from '../../src/stage/labels.js';
 import { createSolidView } from '../../src/stage/solids.js';
 import { createFrame } from '../../src/ui/frame.js';
 import { createRedlines } from '../../src/ui/redline.js';
@@ -23,7 +27,8 @@ import { createSession } from '../../src/ui/session.js';
 import { animate, ease, wait } from '../../src/fx/tween.js';
 import { sfx } from '../../src/fx/sfx.js';
 import { PARTS } from '../../src/core/drawforms.js';
-import { LAT, CLASSIC, SEASONS, sunDir, dayOf, altitude, clock, partOf, darkMask, polyMask, overlap, runsOf, missOf, siteBox } from '../../src/core/sun.js';
+import { LAT, CLASSIC, SEASONS, sunDir, dayOf, altitude, clock, partOf, topAt, darkMask, polyMask, overlap, runsOf, missOf, siteBox, windowSuns, envelopeOf, shadesAt, columnShadow, unionMask } from '../../src/core/sun.js';
+import { moduleLines } from '../../src/core/views.js';
 import { PACKS } from './levels.js';
 import './sunstudy.css';
 
@@ -31,6 +36,7 @@ const D2R = Math.PI / 180;
 const stage = createStage(document.getElementById('stage'), { longShadows: true });
 const frame = createFrame({ game: 'sunstudy', name: 'Sun Study', stage });
 const red = createRedlines(stage);
+const labels = createLabels(stage);
 frame.stack(true);
 
 const PASS = .9;                       // a drawn shadow this close counts
@@ -38,9 +44,13 @@ const LOCK = .95;                      // an hour this close settles on the answ
 const SIGNAL = '#ff5a1f';
 const SEASON_NAMES = { winter: 'Midwinter', equinox: 'Equinox', summer: 'Midsummer' };
 
+const TASK_TAGS = { cast: 'draw the shadow', hour: 'find the hour', fence: 'build to the light' };
+const rect = ([a, b, c, d]) => [[a, b], [c, b], [c, d], [a, d]];
+const envelope = l => envelopeOf(l.plots, l.zf, l.gardens.map(rect), windowSuns(l.season, l.from, l.to));
+const parOf = l => l.task === 'cast' ? 40 + l.parts.length * 10 : l.task === 'fence' ? 30 + envelope(l).reduce((a, b) => a + b, 0) * 4 : 50;
 const packs = PACKS.map(pk => ({
   ...pk,
-  levels: pk.levels.map(l => ({ ...l, label: `${l.name} · ${l.task === 'cast' ? 'draw the shadow' : 'find the hour'}`, par: l.par ?? (l.task === 'cast' ? 40 + l.parts.length * 10 : 50), note: l.learn })),
+  levels: pk.levels.map(l => ({ ...l, label: `${l.name} · ${TASK_TAGS[l.task]}`, par: l.par ?? parOf(l), note: l.learn })),
 }));
 
 // ------------------------------------------------------------------
@@ -53,10 +63,13 @@ function buildScene(specs) {
   const group = new THREE.Group();
   const views = solids.map(s => createSolidView(s, { invalidate: stage.invalidate }));
   for (const v of views) group.add(v.group);
+  // module lines on the walls, so heights can be counted on the model
+  const mods = createLines(moduleLines(solids), 'module', { on: 'model', renderOrder: 1 });
+  group.add(mods);
   const box = new THREE.Box3();
   for (const s of solids) for (const p of s.verts) box.expandByPoint(new THREE.Vector3(...p));
   stage.content.add(group);
-  return { solids, parts, group, box, dispose() { views.forEach(v => v.dispose()); group.removeFromParent(); } };
+  return { solids, parts, group, box, dispose() { views.forEach(v => v.dispose()); mods.dispose(); group.removeFromParent(); } };
 }
 
 // frame the model and the ground its shadows fall on
@@ -100,6 +113,29 @@ function drawPlan(board, solids) {
   }
 }
 
+// spot heights, as on a roof plan: every level of every part, in modules,
+// where it can be seen from above (a post under a canopy is not)
+const heightText = z => '+' + (Math.abs(z - Math.round(z)) < 1e-6 ? Math.round(z) : z.toFixed(1));
+function drawHeights(board, solids, parts) {
+  let n = 0;
+  solids.forEach(s => {
+    const zs = [...new Set(s.verts.map(v => Math.round(v[2] * 1000) / 1000))].filter(z => z > 0).sort((a, b) => b - a);
+    const bottom = Math.min(...s.verts.map(v => v[2]));
+    zs.forEach((z, k) => {
+      const at = s.verts.filter(v => Math.abs(v[2] - z) < 1e-3);
+      let p = [at.reduce((a, v) => a + v[0], 0) / at.length, at.reduce((a, v) => a + v[1], 0) / at.length];
+      // a lower level (the eaves under a ridge): on its southern edge, just inside
+      if (k > 0) {
+        const y = Math.min(...at.map(v => v[1])), xs = at.filter(v => Math.abs(v[1] - y) < 1e-3).map(v => v[0]);
+        p = [(Math.min(...xs) + Math.max(...xs)) / 2, y + .28];
+        if (Math.abs(topAt(parts, p[0], p[1]).z - z) > .5) return;
+      } else if (Math.abs(topAt(parts, p[0], p[1]).z - z) > .05) return;
+      const label = k === 0 && bottom > 1e-6 ? `${heightText(bottom)}–${heightText(z).slice(1)}` : heightText(z);
+      board.text(p, label, { id: 'ht' + n++, color: '#e9e6df', noFit: true });
+    });
+  });
+}
+
 // north, and (for the classic sun) the light in plan
 function drawNorth(board, [[x0, y0], [x1, y1]], { classic = false } = {}) {
   const p = [x1 - .5, y1 - 1.4];
@@ -133,6 +169,7 @@ function castTask(item) {
   board.setGrid('dots', { x0, y0, x1, y1 });
   board.polygon([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], { id: 'site', fill: 'none', stroke: null, hit: false });
   drawPlan(board, site.solids);
+  drawHeights(board, site.solids, site.parts);
   drawNorth(board, plan, { classic: true });
   board.fit();
   frame.fitSheet(board, { lo: .3, hi: .46 });
@@ -177,7 +214,7 @@ function castTask(item) {
   function clear() { if (done) return; closed.length = 0; cur = []; undoStack.length = 0; clearRuns(board, 'df'); draw(); }
 
   frame.title('Can you draw its shadow?', item.name);
-  frame.sub('The light comes over your left shoulder at 45°, as on a drawing board, so every shadow falls north-east by the height that casts it. Tap from dot to dot round the shadow on the plan, and tap the first dot again to close it. Then press Cast.');
+  frame.sub('The light comes over your left shoulder at 45°, as on a drawing board, so every shadow falls north-east by the height that casts it. The numbers on the plan are heights in modules, and the model has a line at every module. Tap from dot to dot round the shadow on the plan, and tap the first dot again to close it. Then press Cast.');
   frame.tools([
     { id: 'undo', label: 'Undo', key: 'Z', keys: ['Ctrl+Z'], run: undo },
     { id: 'clear', label: 'Clear', key: 'X', run: clear, spare: true },
@@ -206,7 +243,7 @@ function castTask(item) {
       return { ok: false, note: `${note} (${Math.round(o * 100)}% matches.)` };
     },
     hint(n) {
-      if (n === 1) return { text: 'Push every top corner north-east by its own height: one module up, one module north and one east. Then join those points to the foot of the walls that throw them.' };
+      if (n === 1) return { text: 'Read the heights on the plan, then push every top corner north-east by its own height: one module up, one module north and one east. Then join those points to the foot of the walls that throw them.' };
       if (n === 2) {
         // the shadow of every top corner, on the ground
         let k = 0;
@@ -390,12 +427,234 @@ function hourTask(item) {
 }
 
 // ------------------------------------------------------------------
+// task: build to the shadow fence
+// ------------------------------------------------------------------
+
+const MOST = 12;                       // floors a plot can take at all
+const HOLD = 450;                      // ms: holding a plot takes a floor off
+
+function fenceTask(item) {
+  const gardens = item.gardens.map(rect), zf = item.zf;
+  const suns = windowSuns(item.season, item.from, item.to);
+  const caps = envelope(item), goal = caps.reduce((a, b) => a + b, 0);
+  const floors = item.plots.map(() => 0), history = [];
+  let hour = item.from, done = false, clean = true, bad = false;
+  stage.sun.castShadow = true;
+  stage.rig.setView(-112.5 * D2R, 34 * D2R, false);
+
+  // the plan: the lot and the gardens, and a module round them
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const [x, y, w, d] of [...item.plots, ...item.gardens.map(([a, b, c, e]) => [a, b, c - a, e - b])]) {
+    x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + w); y1 = Math.max(y1, y + d);
+  }
+  const plan = [[Math.floor(x0 - 1), Math.floor(y0 - 1)], [Math.ceil(x1 + 1), Math.ceil(y1 + 1)]];
+  const top = Math.max(2, ...caps) + 1;
+  frameSite({ box: new THREE.Box3(new THREE.Vector3(), new THREE.Vector3(0, 0, top)) }, plan);
+
+  // the ground: plots drawn fine, gardens outlined and hatched in signal
+  const ground = [], hatch = [];
+  for (const [x, y, w, d] of item.plots) ground.push([[x, y, 0], [x + w, y, 0]], [[x + w, y, 0], [x + w, y + d, 0]], [[x + w, y + d, 0], [x, y + d, 0]], [[x, y + d, 0], [x, y, 0]]);
+  for (const [a, b, c, e] of item.gardens) {
+    const z = zf + .01;
+    hatch.push([[a, b, z], [c, b, z]], [[c, b, z], [c, e, z]], [[c, e, z], [a, e, z]], [[a, e, z], [a, b, z]]);
+    // 45° hatch, clipped to the garden
+    for (let k = a + b + .5; k < c + e; k += .5) {
+      const p = [Math.max(a, k - e), 0], q = [Math.min(c, k - b), 0];
+      p[1] = k - p[0]; q[1] = k - q[0];
+      if (q[0] - p[0] > 1e-6) hatch.push([[p[0], p[1], z], [q[0], q[1], z]]);
+    }
+    labels.add([(a + c) / 2, (b + e) / 2, zf + .05], 'Garden', { signal: true });
+  }
+  const groundLines = createLines(ground, 'guide', { on: 'model' });
+  const hatchLines = createLines(hatch, 'signalThin', { on: 'model' });
+  stage.content.add(groundLines, hatchLines);
+  // the neighbour's wall, when the fence is lifted off the ground
+  const walls = zf > 0 ? item.gardens.flatMap(([a, b, c, e]) => [PARTS.box(a, b - .15, 0, c - a, .15, zf), PARTS.box(a, e, 0, c - a, .15, zf), PARTS.box(a - .15, b - .15, 0, .15, e - b + .3, zf), PARTS.box(c, b - .15, 0, .15, e - b + .3, zf)]).map(s => createSolidView(s, { invalidate: stage.invalidate })) : [];
+  for (const w of walls) stage.content.add(w.group);
+
+  // the columns, one solid per floor so the floors read
+  let views = [];
+  function build3d() {
+    for (const v of views) { v.dispose(); v.group.removeFromParent(); }
+    views = [];
+    item.plots.forEach(([x, y, w, d], i) => {
+      for (let k = 0; k < floors[i]; k++) {
+        const solid = PARTS.box(x, y, k, w, d, 1), v = createSolidView(solid, { invalidate: stage.invalidate });
+        if (k >= caps[i]) solid.faces.forEach((f, fid) => v.setFaceState(fid, 'error'));
+        stage.content.add(v.group);
+        views.push(v);
+      }
+    });
+    stage.invalidate();
+  }
+
+  // the sun in the model, on the owed part of the day
+  const c = new THREE.Vector3((plan[0][0] + plan[1][0]) / 2, (plan[0][1] + plan[1][1]) / 2, 0);
+  const R = Math.max(5, Math.hypot(plan[1][0] - plan[0][0], plan[1][1] - plan[0][1]) * .55);
+  const disc = new THREE.Mesh(new THREE.SphereGeometry(.24, 20, 12), new THREE.MeshBasicMaterial({ color: SIGNAL }));
+  disc.userData.noFrame = true;
+  stage.content.add(disc);
+  const arcSegs = [];
+  for (let i = 0; i < suns.length - 1; i++) arcSegs.push([suns[i], suns[i + 1]].map(({ sun: s }) => [c.x + s[0] * R, c.y + s[1] * R, s[2] * R]));
+  const arc = createLines(arcSegs, 'guide', { on: 'model', renderOrder: 2 });
+  arc.userData.noFrame = true;
+  stage.content.add(arc);
+
+  // the card: the plan, the swept shadows, the floors
+  const { board, body } = openCard('Site plan', `sun owed ${clock(item.from)}–${clock(item.to)}`, { interactive: true });
+  board.setGrid('dots', { x0: plan[0][0], y0: plan[0][1], x1: plan[1][0], y1: plan[1][1] });
+  board.polygon(rect([plan[0][0], plan[0][1], plan[1][0], plan[1][1]]), { id: 'site', fill: 'none', stroke: null, hit: false });
+  gardens.forEach((g, i) => board.polygon(g, { id: 'gd' + i, fill: 'rgba(255, 90, 31, .07)', stroke: 'signalThin', hit: false }));
+  const gardenMask = unionMask(gardens, plan, .1);
+  drawNorth(board, plan);
+
+  const ctl = document.createElement('div');
+  ctl.className = 'ss-ctl';
+  ctl.innerHTML = `<div class="ss-read"><span class="ss-clock"></span><span class="ss-match"></span></div>
+    <div class="ss-day"><div class="ss-track"><b class="ss-knob"></b></div><div class="ss-ends"><span>${clock(item.from)}</span><span>${SEASON_NAMES[item.season]}</span><span>${clock(item.to)}</span></div></div>`;
+  body.append(ctl);
+  const track = ctl.querySelector('.ss-track'), knob = ctl.querySelector('.ss-knob');
+
+  const total = () => floors.reduce((a, b) => a + b, 0);
+  function drawCard() {
+    clearRuns(board, 'sw'); clearRuns(board, 'sx'); clearRuns(board, 'pl');
+    const polys = [];
+    item.plots.forEach((p, i) => { for (const { sun } of suns) { const s = columnShadow(p, floors[i], zf, sun); if (s) polys.push(s); } });
+    const sweep = unionMask(polys, plan, .1);
+    shadeRuns(board, sweep, 'sw', SHADE);
+    shadeRuns(board, { ...sweep, bits: sweep.bits.map((v, k) => v & gardenMask.bits[k]) }, 'sx', 'rgba(255, 90, 31, .7)');
+    item.plots.forEach(([x, y, w, d], i) => {
+      const over = floors[i] > caps[i];
+      // the more floors, the lighter the plot, as on a massing plan
+      board.polygon(rect([x, y, x + w, y + d]), { id: 'pl' + i, fill: `rgba(233, 230, 223, ${Math.min(.5, .06 + floors[i] * .07).toFixed(2)})`, stroke: over ? 'signal' : 'visible', hit: false });
+      board.text([x + w / 2, y + d / 2], floors[i] ? String(floors[i]) : '+', { id: 'plt' + i, signal: over, color: floors[i] ? '#f4f1ea' : '#8d8a83' });
+    });
+  }
+  function show() {
+    hour = Math.max(item.from, Math.min(item.to, hour));
+    const s = sunDir(LAT, item.season, hour);
+    stage.setSun(s);
+    disc.position.set(c.x + s[0] * R, c.y + s[1] * R, s[2] * R);
+    knob.style.left = ((hour - item.from) / (item.to - item.from) * 100) + '%';
+    const when = item.plots.map((p, i) => floors[i] > caps[i] ? shadesAt(p, floors[i], zf, gardens, suns) : null).filter(h => h !== null);
+    ctl.querySelector('.ss-clock').innerHTML = `${total()} <em>of ${goal} · ${clock(hour)}</em>`;
+    const m = ctl.querySelector('.ss-match');
+    m.textContent = when.length ? `garden shaded ${clock(Math.min(...when))}` : 'gardens in sun';
+    m.classList.toggle('is-near', !!when.length);
+    stage.invalidate();
+  }
+  function update() {
+    bad = floors.some((n, i) => n > caps[i]);
+    if (bad) clean = false;
+    build3d(); drawCard(); show();
+    frame.tool('undo', { off: !history.length || done });
+    frame.tool('clear', { off: !total() || done });
+    if (!bad && total() === goal && !done) { done = true; sfx.thud?.(); session.check(); }
+  }
+  function change(i, delta) {
+    if (done) return;
+    const n = floors[i] + delta;
+    if (n < 0 || n > MOST) return;
+    floors[i] = n; history.push([i, delta]);
+    sfx.tick?.(); navigator.vibrate?.(delta > 0 ? 6 : 12);
+    update();
+  }
+
+  // a tap adds a floor, a hold takes one off
+  const plotAt = p => item.plots.findIndex(([x, y, w, d]) => p[0] >= x && p[0] <= x + w && p[1] >= y && p[1] <= y + d);
+  let held = null, timer = 0;
+  const off = board.onPointer({
+    down(ev, p) {
+      const i = plotAt(p);
+      held = i >= 0 ? { i, used: false } : null;
+      clearTimeout(timer);
+      if (held) timer = setTimeout(() => { if (held) { held.used = true; change(held.i, -1); } }, HOLD);
+    },
+    up(ev, p) {
+      clearTimeout(timer);
+      if (held && !held.used && plotAt(p) === held.i) change(held.i, +1);
+      held = null;
+    },
+  });
+  board.el.addEventListener('contextmenu', ev => ev.preventDefault());
+
+  // looking through the owed hours
+  let dragging = false;
+  const setFrom = ev => { const r = track.getBoundingClientRect(); hour = item.from + (item.to - item.from) * Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)); show(); };
+  const onDown = ev => { dragging = true; track.setPointerCapture?.(ev.pointerId); setFrom(ev); };
+  const onMove = ev => { if (dragging) setFrom(ev); };
+  const onUp = () => { dragging = false; };
+  track.addEventListener('pointerdown', onDown);
+  track.addEventListener('pointermove', onMove);
+  track.addEventListener('pointerup', onUp);
+  track.addEventListener('pointercancel', onUp);
+  const onKey = ev => { if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') { ev.preventDefault(); hour += ev.key === 'ArrowRight' ? .25 : -.25; show(); } };
+  window.addEventListener('keydown', onKey);
+
+  function undo() { if (done || !history.length) return; const [i, d] = history.pop(); floors[i] -= d; update(); }
+  function clear() { if (done) return; floors.fill(0); history.length = 0; update(); }
+
+  board.fit();
+  frame.fitSheet(board, { lo: .3, hi: .44 });
+  const owed = `from ${clock(item.from)} to ${clock(item.to)}${item.season === 'equinox' ? ' at the equinox' : item.season === 'winter' ? ' at midwinter' : ' at midsummer'}`;
+  frame.title('How high can you build?', item.name);
+  frame.sub(`The neighbours are owed sun in their gardens ${owed}${zf ? `, above their ${zf * 3} m wall` : ''}. Tap a plot on the plan to add a floor, hold it to take one off. Build ${goal} floors and keep every garden in sun.`);
+  frame.tools([
+    { id: 'undo', label: 'Undo', key: 'Z', keys: ['Ctrl+Z'], run: undo },
+    { id: 'clear', label: 'Clear', key: 'X', run: clear, spare: true },
+    { id: 'hint', label: 'Hint', key: 'H', run: () => session.hint() },
+  ]);
+  frame.primaryEl.style.display = 'none';
+  update();
+
+  const reach = h => { const s = sunDir(LAT, item.season, h); return Math.hypot(s[0], s[1]) / s[2]; };
+  return {
+    get clean() { return clean; },
+    get floors() { return floors.slice(); },
+    caps,
+    check: () => !bad && total() >= goal ? { ok: true } : { ok: false, note: bad ? 'A shadow lands in a garden: take the orange floors off.' : `${goal - total()} more floors fit in the light.` },
+    hint(n) {
+      if (n === 1) return { text: `A floor one module high throws a shadow ${reach(item.from).toFixed(1)} modules long at ${clock(item.from)} and ${reach(12).toFixed(1)} at noon. Count the modules from each plot to the garden, along the shadows: that is how high it can go.` };
+      if (n === 2) {
+        // build one plot, the tallest, to its limit
+        const i = caps.indexOf(Math.max(...caps));
+        while (floors[i] < caps[i]) { floors[i]++; history.push([i, 1]); }
+        while (floors[i] > caps[i]) { floors[i]--; history.push([i, -1]); }
+        update();
+        return { text: `That plot is built to its limit, ${caps[i]} floors. One more and its shadow reaches a garden${shadesAt(item.plots[i], caps[i] + 1, zf, gardens, suns) !== null ? ` at ${clock(shadesAt(item.plots[i], caps[i] + 1, zf, gardens, suns))}` : ''}.` };
+      }
+      session.peek();
+      caps.forEach((n, i) => { floors[i] = n; });
+      update();
+      return { text: 'This is the envelope: every plot as high as the light allows.' };
+    },
+    async solved() {
+      done = true;
+      ctl.querySelector('.ss-match').textContent = 'gardens in sun';
+      // sweep the sun through the owed hours over the finished envelope
+      await animate({ duration: 1600, ease: ease.cubicInOut, essential: true, update: t => { hour = item.from + (item.to - item.from) * t; show(); } }).promise;
+    },
+    dispose() {
+      off(); clearTimeout(timer);
+      track.removeEventListener('pointerdown', onDown); window.removeEventListener('keydown', onKey);
+      for (const v of [...views, ...walls]) { v.dispose(); v.group.removeFromParent(); }
+      groundLines.dispose(); hatchLines.dispose(); arc.dispose();
+      [groundLines, hatchLines, arc].forEach(l => l.removeFromParent?.());
+      disc.geometry.dispose(); disc.material.dispose(); disc.removeFromParent();
+      labels.clear(); closeCard();
+      frame.primaryEl.style.display = '';
+    },
+  };
+}
+
+// ------------------------------------------------------------------
 // the game definition
 // ------------------------------------------------------------------
 
 let task = null;
-function reset() { task?.dispose(); task = null; red.clear(); stage.clear(); }
-function load(item) { reset(); task = item.task === 'hour' ? hourTask(item) : castTask(item); }
+const TASKS = { cast: castTask, hour: hourTask, fence: fenceTask };
+function reset() { task?.dispose(); task = null; red.clear(); labels.clear(); stage.clear(); }
+function load(item) { reset(); task = TASKS[item.task](item); }
 
 // generated: a few blocks of whole-module heights, to draw the shadow of
 function generate(rng, d) {
@@ -412,13 +671,14 @@ function generate(rng, d) {
 const def = {
   id: 'sunstudy', prefix: 'L', name: 'Sun Study',
   lead: 'Move the sun, read the shadow.',
-  sub: 'Draw a shadow the way architects learn to, then find the hour and season a shadow plan was drawn for, under the real sun over Istanbul.',
+  sub: 'Draw a shadow the way architects learn to, find the hour and season a shadow plan was drawn for, and build as high as the neighbours’ sun allows, under the real sun over Istanbul.',
   packs,
   load,
   check: () => task.check(),
   hint: n => task.hint(n),
   onSolved: () => task.solved?.(),
   generate,
+  master: { name: 'clean build', says: 'built it without ever shading a garden', applies: it => it.task === 'fence', test: () => task?.clean },
   modes: ['challenge', 'daily'],
   dailyDifficulty: 3,
 };

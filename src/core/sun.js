@@ -258,3 +258,76 @@ export function outlineOf(m, { tol = m.step * 1.2, snap = 0 } = {}) {
   }
   return loops;
 }
+
+// ------------------------------------------------------------------
+// the solar envelope (Ralph Knowles): how high each plot of a lot may build
+// before its shadow reaches a neighbour's garden in the hours it is owed sun
+// ------------------------------------------------------------------
+
+// the convex hull of plan points, counter-clockwise
+export function hullOf(pts) {
+  const p = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], hi = [];
+  for (const q of p) { while (lo.length > 1 && cross(lo[lo.length - 2], lo[lo.length - 1], q) <= 1e-12) lo.pop(); lo.push(q); }
+  for (const q of p.reverse()) { while (hi.length > 1 && cross(hi[hi.length - 2], hi[hi.length - 1], q) <= 1e-12) hi.pop(); hi.push(q); }
+  return [...lo.slice(0, -1), ...hi.slice(0, -1)];
+}
+
+// the shadow of a column (a w x d plot, h high) on the plane z = zf: its
+// footprint swept away from the sun; null when the column is below the plane
+export function columnShadow([x, y, w, d], h, zf, sun) {
+  if (h <= zf + 1e-9 || sun[2] <= 1e-6) return null;
+  const k = (h - zf) / sun[2], dx = -sun[0] * k, dy = -sun[1] * k;
+  const sq = [[x, y], [x + w, y], [x + w, y + d], [x, y + d]];
+  return hullOf([...sq, ...sq.map(([a, b]) => [a + dx, b + dy])]);
+}
+
+// do two convex polygons share some area (not just an edge)? separating axes
+export function convexMeet(A, B, eps = 1e-6) {
+  for (const P of [A, B]) for (let i = 0; i < P.length; i++) {
+    const a = P[i], b = P[(i + 1) % P.length], n = [b[1] - a[1], a[0] - b[0]], L = Math.hypot(...n) || 1;
+    const pr = Q => Q.map(q => (q[0] * n[0] + q[1] * n[1]) / L);
+    const pa = pr(A), pb = pr(B);
+    if (Math.max(...pa) <= Math.min(...pb) + eps || Math.max(...pb) <= Math.min(...pa) + eps) return false;
+  }
+  return true;
+}
+
+// the suns of a window of hours, every quarter hour, both ends included
+export function windowSuns(season, from, to, lat = LAT) {
+  const out = [];
+  for (let h = from; h <= to + 1e-9; h += .25) out.push({ hour: h, sun: sunDir(lat, season, h) });
+  return out;
+}
+
+// the first moment a column's shadow lands on a garden, or null
+//   gardens: convex plan polygons; plot [x, y, w, d]
+export function shadesAt(plot, h, zf, gardens, suns) {
+  for (const { hour, sun } of suns) {
+    const s = columnShadow(plot, h, zf, sun);
+    if (s) for (const g of gardens) if (convexMeet(s, g)) return hour;
+  }
+  return null;
+}
+
+// the envelope: the most floors each plot can take (floor = one module)
+export function envelopeOf(plots, zf, gardens, suns, most = 12) {
+  return plots.map(p => { let h = 0; while (h < most && shadesAt(p, h + 1, zf, gardens, suns) === null) h++; return h; });
+}
+
+// the plan points inside any of the polygons (a union, unlike polyMask)
+export function unionMask(polys, box, step = .1) {
+  const g = gridOf(box, step), bits = new Uint8Array(g.nx * g.ny);
+  for (const p of polys) {
+    if (!p || p.length < 3) continue;
+    const xs = p.map(q => q[0]), ys = p.map(q => q[1]);
+    const i0 = Math.max(0, Math.floor((Math.min(...xs) - g.x0) / step - JX)), i1 = Math.min(g.nx - 1, Math.ceil((Math.max(...xs) - g.x0) / step - JX));
+    const j0 = Math.max(0, Math.floor((Math.min(...ys) - g.y0) / step - JY)), j1 = Math.min(g.ny - 1, Math.ceil((Math.max(...ys) - g.y0) / step - JY));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const k = j * g.nx + i;
+      if (!bits[k] && inPoly(p, g.x0 + (i + JX) * step, g.y0 + (j + JY) * step)) bits[k] = 1;
+    }
+  }
+  return { ...g, bits };
+}

@@ -6,6 +6,9 @@
 //   B  Hour   the real sun over Istanbul (41° N). The card shows a shadow plan;
 //             drag the sun through the day, and change the season, until the
 //             shadows on the site are the ones on the card.
+//   C  Shadow fence  Ralph Knowles's solar envelope: build floors on a lot, but
+//             no shadow may reach the neighbours' gardens in the hours they are
+//             owed sun. Floors are one module; the envelope is the answer.
 //
 // Levels follow the ladder of the other games: introduce (1-2), develop
 // (3-4), twist (5-6), a breather (7) and a showpiece (8).
@@ -18,6 +21,9 @@ const B = (...a) => ['box', ...a];
 const P = (...a) => ['pyramidOn', ...a];
 const C = (id, name, o) => ({ id, name, task: 'cast', ...o });
 const H = (id, name, o) => ({ id, name, task: 'hour', ...o });
+const F = (id, name, o) => ({ id, name, task: 'fence', zf: 0, season: 'equinox', from: 9, to: 15, ...o });
+// plots of a lot: c x r plots, each w x d modules
+const plots = (x, y, c, r, w = 1, d = w) => Array.from({ length: c * r }, (_, k) => [x + (k % c) * w, y + Math.floor(k / c) * d, w, d]);
 
 // a stepped pyramid of n terraces, each one module high, centred on (cx, cy)
 const terraces = (cx, cy, n, w0) => Array.from({ length: n }, (_, i) => B(cx - (w0 - i) / 2, cy - (w0 - i) / 2, i, w0 - i, w0 - i, 1));
@@ -78,5 +84,32 @@ export const PACKS = [
     // showpiece: a stepped pyramid, after El Castillo at Chichén Itzá
     H('B8', 'The serpent', { parts: terraces(0, 0, 5, 7), season: 'equinox', hour: 16.5, start: 11,
       learn: 'At Chichén Itzá the stepped corners of the pyramid throw a row of triangles down the stair rail at the equinox, a serpent sliding down to its stone head. The same steps throw this saw-tooth here.' }),
+  ] },
+  { id: 'C', name: 'Shadow fence', brief: 'Build as high as you like, but the neighbours are owed their sun. In the hours on the card no shadow of yours may land in their gardens. Tap a plot to add a floor, hold it to take one off.', levels: [
+    // the toy: one tower, a street, a garden
+    F('C1', 'One tower', { plots: [[0, 0, 2, 2]], gardens: [[-3, 5, 5, 8]],
+      learn: 'At the equinox every shadow reaches 0.87 of its height to the north, all day long. Three modules of street buy three floors.' }),
+    // a row of three plots: the building steps up away from the garden
+    F('C2', 'A row', { plots: plots(0, 0, 1, 3, 3, 1), gardens: [[-2, 5, 5, 8]],
+      learn: 'Each module further from the garden buys about one more floor. The envelope is a slope, and the building steps down toward the neighbour.' }),
+    // develop: a garden to the north-east, and a longer day
+    F('C3', 'Longer hours', { plots: plots(0, 0, 3, 3), gardens: [[4, 3, 8, 7]], from: 8, to: 16,
+      learn: 'A garden to the north-east is reached by the long shadows of the afternoon. Owe it sun from 8 to 16 and the lot loses three floors it could keep from 9 to 15.' }),
+    // develop: the fence lifts
+    F('C4', 'A fence', { plots: plots(0, 0, 1, 3, 3, 1), gardens: [[-2, 5, 5, 8]], zf: 1,
+      learn: 'The neighbour’s own wall shades the foot of the garden anyway, so the rule only protects it above the wall. Lift the shadow fence one module and every plot gains a floor.' }),
+    // twist: two neighbours
+    F('C5', 'Two neighbours', { plots: plots(0, 0, 3, 3), gardens: [[-1, 5, 4, 8], [5, -1, 8, 4]],
+      learn: 'Owe sun to the north and to the east and the envelope slopes two ways: it peaks in the corner furthest from both gardens.' }),
+    // twist, harder: the winter sun
+    F('C6', 'Winter sun', { plots: plots(0, 0, 1, 6, 3, 1), gardens: [[-2, 9, 5, 12]], season: 'winter', from: 10, to: 14,
+      learn: 'The midwinter sun is so low that every floor throws its shadow almost two and a half modules. Knowles set his envelopes by the winter, when sun is worth most.' }),
+    // breather: a corner lot, the garden away to the north-west
+    F('C7', 'Corner lot', { plots: plots(0, 0, 2, 2, 2), gardens: [[-5, 5, 0, 8]],
+      learn: 'Only the plots nearest the garden are held down. A corner lot with its neighbour off to one side can build high where the shadows fall on the street.' }),
+    // showpiece: four lots, each with its garden to the north
+    F('C8', 'Four lots', { plots: [...plots(0, 0, 1, 2, 3, 1), ...plots(5, 0, 1, 2, 3, 1), ...plots(0, 7, 1, 2, 3, 1), ...plots(5, 7, 1, 2, 3, 1)],
+      gardens: [[0, 4, 3, 7], [5, 4, 8, 7], [0, 11, 3, 14], [5, 11, 8, 14]],
+      learn: 'Knowles’s students in Los Angeles built whole neighbourhoods this way: every house high at the south of its lot, low toward the next garden, and every garden in sun.' }),
   ] },
 ];
