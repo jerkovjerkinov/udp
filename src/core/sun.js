@@ -331,3 +331,81 @@ export function unionMask(polys, box, step = .1) {
   }
   return { ...g, bits };
 }
+
+// ------------------------------------------------------------------
+// light in: a closed room [W, D, H] from the origin, openings cut in one of
+// its planes on a grid of cells, and the sun patch they let onto the floor
+// ------------------------------------------------------------------
+
+// each plane's cell coordinates (u, v): along it, and up it (or north, for the roof)
+export const PLANES = {
+  south: { size: ([W, , H]) => [W, H], uv: p => [p[0], p[2]] },
+  north: { size: ([W, , H]) => [W, H], uv: p => [p[0], p[2]] },
+  east: { size: ([, D, H]) => [D, H], uv: p => [p[1], p[2]] },
+  west: { size: ([, D, H]) => [D, H], uv: p => [p[1], p[2]] },
+  roof: { size: ([W, D]) => [W, D], uv: p => [p[0], p[1]] },
+};
+export const planeCells = (room, plane, cell) => PLANES[plane].size(room).map(s => Math.round(s / cell));
+
+// where the light reaching floor point (x, y) comes in: the face its ray to the sun leaves the room by
+export function exitOf([W, D, H], x, y, s) {
+  let t = Infinity, face = null;
+  const at = (k, f) => { if (k > 1e-9 && k < t) { t = k; face = f; } };
+  if (s[2] > 0) at(H / s[2], 'roof');
+  if (s[1] < 0) at(-y / s[1], 'south'); else if (s[1] > 0) at((D - y) / s[1], 'north');
+  if (s[0] > 0) at((W - x) / s[0], 'east'); else if (s[0] < 0) at(-x / s[0], 'west');
+  return face ? { face, p: [x + s[0] * t, y + s[1] * t, s[2] * t] } : null;
+}
+
+// a moment's light map: for each floor sample, the cell its light comes
+// through, or -1 (another wall, the sun down, or a blocker such as an eave)
+export function lightMap(room, plane, cell, s, step = .05, blockers = []) {
+  const g = gridOf([[0, 0], [room[0], room[1]]], step), cells = new Int16Array(g.nx * g.ny).fill(-1);
+  const [nu, nv] = planeCells(room, plane, cell);
+  if (s[2] > 1e-6) for (let j = 0; j < g.ny; j++) for (let i = 0; i < g.nx; i++) {
+    const e = exitOf(room, g.x0 + (i + JX) * step, g.y0 + (j + JY) * step, s);
+    if (!e || e.face !== plane) continue;
+    const [u, v] = PLANES[plane].uv(e.p);
+    const a = Math.min(nu - 1, Math.max(0, Math.floor(u / cell))), b = Math.min(nv - 1, Math.max(0, Math.floor(v / cell)));
+    if (blockers.length && firstHit(blockers, e.p, s)) continue;
+    cells[j * g.nx + i] = b * nu + a;
+  }
+  return { ...g, nu, nv, cells };
+}
+
+// the floor in sun, for a set of open cells (a Set or an array of indices)
+export function litMask(map, open) {
+  const on = open instanceof Set ? open : new Set(open);
+  return { x0: map.x0, y0: map.y0, step: map.step, nx: map.nx, ny: map.ny, bits: Uint8Array.from(map.cells, c => c >= 0 && on.has(c) ? 1 : 0) };
+}
+
+// how much of a target mask the open cells light
+export function coverOf(map, target, open) {
+  const on = open instanceof Set ? open : new Set(open);
+  let n = 0, lit = 0;
+  for (let k = 0; k < target.bits.length; k++) if (target.bits[k]) { n++; if (map.cells[k] >= 0 && on.has(map.cells[k])) lit++; }
+  return n ? lit / n : 0;
+}
+
+// the fewest cells that light every target to `need`, never using a cell that
+// lets sun onto the floor in a moment it must stay out: greedy on what each
+// cell adds to the targets still short (exact for a single target, since the
+// cells' light is disjoint)
+export function fewestCells(goals, avoid = [], need = .9) {
+  const banned = new Set(avoid.flatMap(m => [...m.cells].filter(c => c >= 0)));
+  const open = new Set();
+  const short = () => goals.filter(g => coverOf(g.map, g.target, open) < need - 1e-9);
+  for (let guard = 0; guard < 400 && short().length; guard++) {
+    const gain = new Map();
+    for (const g of short()) {
+      const n = g.target.bits.reduce((a, b) => a + b, 0);
+      for (let k = 0; k < g.target.bits.length; k++) {
+        const c = g.map.cells[k];
+        if (g.target.bits[k] && c >= 0 && !open.has(c) && !banned.has(c)) gain.set(c, (gain.get(c) || 0) + 1 / n);
+      }
+    }
+    if (!gain.size) return null;
+    open.add([...gain].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0]);
+  }
+  return [...open].sort((a, b) => a - b);
+}

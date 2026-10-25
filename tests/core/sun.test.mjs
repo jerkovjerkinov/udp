@@ -1,5 +1,5 @@
 // node tests/core/sun.test.mjs — Sun Study: the sun, and the shadows it leaves
-import { sunDir, dayOf, altitude, CLASSIC, partOf, darkAt, darkMask, polyMask, overlap, runsOf, siteBox, topAt, SEASONS, columnShadow, convexMeet, windowSuns, envelopeOf, shadesAt, unionMask, hullOf } from '../../src/core/sun.js';
+import { sunDir, dayOf, altitude, CLASSIC, partOf, darkAt, darkMask, polyMask, overlap, runsOf, siteBox, topAt, SEASONS, columnShadow, convexMeet, windowSuns, envelopeOf, shadesAt, unionMask, hullOf, planeCells, lightMap, litMask, coverOf, fewestCells, exitOf } from '../../src/core/sun.js';
 import { PARTS } from '../../src/core/drawforms.js';
 import { PACKS } from '../../games/sunstudy/levels.js';
 
@@ -58,8 +58,42 @@ ok(convexMeet([[0, 0], [2, 0], [2, 2], [0, 2]], [[1, 1], [3, 1], [3, 3], [1, 3]]
 ok(windowSuns('equinox', 9, 15).length === 25, 'the owed hours, every quarter hour');
 const rectOf = ([a, b, c, d]) => [[a, b], [c, b], [c, d], [a, d]];
 
+// light in: noon light through a south wall lands straight in, 0.87 deep per module up
+const ex = exitOf([4, 4, 3], 2, 1.74, noonEq);
+ok(ex.face === 'south' && near(ex.p[2], 1.74 * Math.tan(49 * Math.PI / 180), 1e-6), 'noon light at 1.74 deep came through the south wall, 2 up');
+ok(exitOf([4, 4, 3], 2, 3.9, noonEq).face === 'roof', 'light deep in the room came through the roof');
+const lm = lightMap([4, 4, 3], 'south', .5, noonEq, .05);
+ok(litMask(lm, []).bits.every(v => !v), 'a closed room is dark');
+
 // the levels
 for (const pk of PACKS) for (const l of pk.levels) {
+  if (l.task === 'light') {
+    const [nu, nv] = planeCells(l.room, l.plane, l.cell);
+    const floor = [[0, 0], [l.room[0], l.room[1]]];
+    const blockers = (l.eaves || []).map(a => partOf(PARTS.box(...a)));
+    const goals = l.goals.map(g => {
+      const map = lightMap(l.room, l.plane, l.cell, sunDir(41, g.season, g.hour), .05, blockers);
+      if (g.cells) ok(g.cells.every(([a, b]) => a >= 0 && b >= 0 && a < nu && b < nv), `${l.id}: the designed opening lies on the ${l.plane}`);
+      const target = g.rect ? polyMask([rectOf(g.rect)], floor, .05) : litMask(map, g.cells.map(([a, b]) => b * nu + a));
+      return { map, target };
+    });
+    goals.forEach((g, i) => ok(g.target.bits.reduce((a, b) => a + b, 0) > 60, `${l.id}: mark ${i} is a real patch of floor`));
+    const avoid = (l.avoid || []).map(m => lightMap(l.room, l.plane, l.cell, sunDir(41, m.season, m.hour), .05, blockers));
+    const best = fewestCells(goals, avoid);
+    ok(best && best.length >= 2 && best.length <= 12, `${l.id}: lit with a few cells (${best?.length})`);
+    if (best) {
+      ok(goals.every(g => coverOf(g.map, g.target, best) >= .9), `${l.id}: the fewest cells light every mark`);
+      ok(avoid.every(m => litMask(m, best).bits.every(v => !v)), `${l.id}: and keep the summer out`);
+      // the fewest really are the fewest, for one mark: no smaller set reaches 90%
+      if (goals.length === 1) {
+        const g = goals[0], per = new Map();
+        g.target.bits.forEach((v, k) => { const c = g.map.cells[k]; if (v && c >= 0) per.set(c, (per.get(c) || 0) + 1); });
+        const n = g.target.bits.reduce((a, b) => a + b, 0), top = [...per.values()].sort((a, b) => b - a).slice(0, best.length - 1).reduce((a, b) => a + b, 0);
+        ok(top / n < .9, `${l.id}: ${best.length - 1} cells can't light the mark`);
+      }
+    }
+    continue;
+  }
   if (l.task === 'fence') {
     const gardens = l.gardens.map(rectOf), suns = windowSuns(l.season, l.from, l.to);
     const caps = envelopeOf(l.plots, l.zf, gardens, suns);

@@ -25,7 +25,7 @@ export const GAMES = [
   { id: 'developments', prefix: 'D', family: 'Sheet', name: 'Developments', blurb: 'Cut solids open into flat nets, find the edges that glue together, and fold nets in your head.', ready: true },
   { id: 'drawing', prefix: 'A', family: 'Drawing', name: 'Drawing Set', blurb: 'Draw a building as it looks from the front, the side and above, and work out a building from its drawings.', ready: true },
   { id: 'oblique', prefix: 'V', family: 'Drawing', name: 'Oblique', blurb: 'Other ways of showing a building: find the one view a figure was painted for, and the moves that turn a block into a house.', ready: true },
-  { id: 'sunstudy', prefix: 'L', family: 'Drawing', name: 'Sun Study', blurb: 'Move the sun and read the shadow: draw a shadow the way architects learn to, then find the hour and season a shadow plan shows.', ready: true },
+  { id: 'sunstudy', prefix: 'L', family: 'Drawing', name: 'Sun Study', blurb: 'Move the sun and read the shadow: draw a shadow, find the hour a shadow plan shows, build to the neighbours’ sun, and let light into a room.', ready: true },
   { id: 'stack', prefix: 'S', family: 'Building', name: 'Stack', blurb: 'Stack housing on a site so every home is held up, gets daylight, keeps some open roof and has a way in.', ready: true },
   { id: 'roof', prefix: 'R', family: 'Building', name: 'Roof Plans', blurb: 'Grow roofs from footprints, read hips and valleys, and drain the rain.', ready: true },
   { id: 'buildorder', prefix: 'B', family: 'Building', name: 'Build Order', blurb: 'Take a building apart and put it back together under real gravity. Pull the wrong block and it comes down.', ready: true },

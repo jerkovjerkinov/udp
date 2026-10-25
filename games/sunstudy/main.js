@@ -27,7 +27,7 @@ import { createSession } from '../../src/ui/session.js';
 import { animate, ease, wait } from '../../src/fx/tween.js';
 import { sfx } from '../../src/fx/sfx.js';
 import { PARTS } from '../../src/core/drawforms.js';
-import { LAT, CLASSIC, SEASONS, sunDir, dayOf, altitude, clock, partOf, topAt, darkMask, polyMask, overlap, runsOf, missOf, siteBox, windowSuns, envelopeOf, shadesAt, columnShadow, unionMask } from '../../src/core/sun.js';
+import { LAT, CLASSIC, SEASONS, sunDir, dayOf, altitude, clock, partOf, topAt, darkMask, polyMask, overlap, runsOf, missOf, siteBox, windowSuns, envelopeOf, shadesAt, columnShadow, unionMask, PLANES, planeCells, lightMap, litMask, coverOf, fewestCells, outlineOf, inPoly } from '../../src/core/sun.js';
 import { moduleLines } from '../../src/core/views.js';
 import { PACKS } from './levels.js';
 import './sunstudy.css';
@@ -41,13 +41,14 @@ frame.stack(true);
 
 const PASS = .9;                       // a drawn shadow this close counts
 const LOCK = .95;                      // an hour this close settles on the answer
+const NEED = .9;                       // a mark this well lit counts
 const SIGNAL = '#ff5a1f';
 const SEASON_NAMES = { winter: 'Midwinter', equinox: 'Equinox', summer: 'Midsummer' };
 
-const TASK_TAGS = { cast: 'draw the shadow', hour: 'find the hour', fence: 'build to the light' };
+const TASK_TAGS = { cast: 'draw the shadow', hour: 'find the hour', fence: 'build to the light', light: 'let the light in' };
 const rect = ([a, b, c, d]) => [[a, b], [c, b], [c, d], [a, d]];
 const envelope = l => envelopeOf(l.plots, l.zf, l.gardens.map(rect), windowSuns(l.season, l.from, l.to));
-const parOf = l => l.task === 'cast' ? 40 + l.parts.length * 10 : l.task === 'fence' ? 30 + envelope(l).reduce((a, b) => a + b, 0) * 4 : 50;
+const parOf = l => l.task === 'cast' ? 40 + l.parts.length * 10 : l.task === 'fence' ? 30 + envelope(l).reduce((a, b) => a + b, 0) * 4 : l.task === 'light' ? 30 + lightOf(l).best.length * 6 : 50;
 const packs = PACKS.map(pk => ({
   ...pk,
   levels: pk.levels.map(l => ({ ...l, label: `${l.name} · ${TASK_TAGS[l.task]}`, par: l.par ?? parOf(l), note: l.learn })),
@@ -648,11 +649,254 @@ function fenceTask(item) {
 }
 
 // ------------------------------------------------------------------
+// task: let the light in
+// ------------------------------------------------------------------
+
+const WALL = .12;                       // wall thickness, outside the room
+const CUT = .35;                        // near walls, cut down so the room can be seen into
+const GAP = .3;                         // between the plan and the folded-out plane
+// the camera looks at the opening from inside the room, over the near walls
+const LOOK = { south: { yaw: 67.5, near: ['north', 'east'] }, east: { yaw: 202.5, near: ['west', 'south'] }, west: { yaw: -22.5, near: ['east', 'south'] }, roof: { yaw: -112.5, near: ['south', 'west'] } };
+const PLANE_NAMES = { south: 'south wall', east: 'east wall', west: 'west wall', roof: 'roof' };
+const momentName = m => `${SEASON_NAMES[m.season]} ${clock(m.hour)}`;
+
+// a box from its two corners
+const boxOf = ([x0, y0, z0], [x1, y1, z1]) => PARTS.box(x0, y0, z0, x1 - x0, y1 - y0, z1 - z0);
+// a run of cells u0..u1 on row v0..v1 of a plane, as the solid that closes it
+function cellBox([W, D, H], plane, u0, u1, v0, v1) {
+  if (plane === 'south') return boxOf([u0, -WALL, v0], [u1, 0, v1]);
+  if (plane === 'north') return boxOf([u0, D, v0], [u1, D + WALL, v1]);
+  if (plane === 'east') return boxOf([W, u0, v0], [W + WALL, u1, v1]);
+  if (plane === 'west') return boxOf([-WALL, u0, v0], [0, u1, v1]);
+  return boxOf([u0, v0, H], [u1, v1, H + WALL]);
+}
+// a whole plane, its corners included
+function planeBox([W, D, H], plane, z1 = H) {
+  if (plane === 'south') return boxOf([-WALL, -WALL, 0], [W + WALL, 0, z1]);
+  if (plane === 'north') return boxOf([-WALL, D, 0], [W + WALL, D + WALL, z1]);
+  if (plane === 'east') return boxOf([W, 0, 0], [W + WALL, D, z1]);
+  if (plane === 'west') return boxOf([-WALL, 0, 0], [0, D, z1]);
+  return boxOf([-WALL, -WALL, H], [W + WALL, D + WALL, H + WALL]);
+}
+// the opening plane on the card: walls folded out about their foot, the roof beside the plan
+function foldOut([W, D], plane) {
+  if (plane === 'south') return (u, v) => [u, -GAP - v];
+  if (plane === 'east') return (u, v) => [W + GAP + v, u];
+  if (plane === 'west') return (u, v) => [-GAP - v, u];
+  return (u, v) => [W + 1 + u, v];
+}
+
+// what a level's goals and keep-outs are, as light maps and masks (cached: the par needs them too)
+function lightOf(l) {
+  const lightCache = lightOf.cache ??= new Map();
+  if (lightCache.has(l.id)) return lightCache.get(l.id);
+  const [nu, nv] = planeCells(l.room, l.plane, l.cell);
+  const blockers = (l.eaves || []).map(a => partOf(PARTS.box(...a)));
+  const floor = [[0, 0], [l.room[0], l.room[1]]];
+  const goals = l.goals.map(g => {
+    const map = lightMap(l.room, l.plane, l.cell, sunDir(LAT, g.season, g.hour), .05, blockers);
+    const target = g.rect ? polyMask([rect(g.rect)], floor, .05) : litMask(map, g.cells.map(([a, b]) => b * nu + a));
+    return { ...g, map, target };
+  });
+  const avoid = (l.avoid || []).map(m => ({ ...m, map: lightMap(l.room, l.plane, l.cell, sunDir(LAT, m.season, m.hour), .05, blockers) }));
+  const best = fewestCells(goals, avoid.map(a => a.map), NEED);
+  const out = { nu, nv, goals, avoid, best, budget: best.length + Math.max(1, Math.round(best.length * .25)) };
+  lightCache.set(l.id, out);
+  return out;
+}
+
+function lightTask(item) {
+  const room = item.room, [W, D, H] = room, cell = item.cell;
+  const { nu, nv, goals, avoid, best, budget } = lightOf(item);
+  const moments = [...goals.map(g => ({ ...g, keep: false })), ...avoid.map(a => ({ ...a, keep: true }))];
+  const open = new Set(), history = [];
+  let shown = 0, done = false, cover = goals.map(() => 0), leaks = avoid.map(() => 0);
+  stage.sun.castShadow = true;
+  const look = LOOK[item.plane];
+  stage.rig.setView(look.yaw * D2R, (item.plane === 'roof' ? 30 : 36) * D2R, false);
+  frameSite({ box: new THREE.Box3(new THREE.Vector3(), new THREE.Vector3(0, 0, H)) }, [[-.6, -.6], [W + .6, D + .6]]);
+
+  // shadow casters that the camera does not see: the whole room, exactly
+  const shadowMat = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+  const casters = new THREE.Group();
+  stage.content.add(casters);
+  const addCaster = s => {
+    const g = new THREE.BufferGeometry();
+    const pos = [];
+    for (const f of s.faces) { const p = f.loop.map(i => s.verts[i]); for (let k = 1; k + 1 < p.length; k++) pos.push(...p[0], ...p[k], ...p[k + 1]); }
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    const m = new THREE.Mesh(g, shadowMat);
+    m.castShadow = true; m.userData.noFrame = true;
+    casters.add(m);
+  };
+  // what is seen: the far walls whole, the near ones cut down, the opening plane in cells
+  const seen = [];
+  const addSeen = (s, opts = {}) => { const v = createSolidView(s, { invalidate: stage.invalidate, castShadow: false, ...opts }); stage.content.add(v.group); seen.push(v); return v; };
+  for (const w of ['south', 'north', 'east', 'west', 'roof']) {
+    if (w === item.plane) continue;
+    addCaster(planeBox(room, w));
+    if (w !== 'roof') addSeen(planeBox(room, w, look.near.includes(w) ? CUT : H));
+  }
+  for (const e of item.eaves || []) { const s = PARTS.box(...e); addCaster(s); addSeen(s); }
+  // the opening plane's frame: corner posts, or the roof's rim
+  const rim = item.plane === 'roof'
+    ? [boxOf([-WALL, -WALL, H], [W + WALL, 0, H + WALL]), boxOf([-WALL, D, H], [W + WALL, D + WALL, H + WALL]), boxOf([-WALL, 0, H], [0, D, H + WALL]), boxOf([W, 0, H], [W + WALL, D, H + WALL])]
+    : item.plane === 'south' ? [boxOf([-WALL, -WALL, 0], [0, 0, H]), boxOf([W, -WALL, 0], [W + WALL, 0, H])] : [];
+  for (const s of rim) { addCaster(s); addSeen(s); }
+  let planeViews = [], planeCasters = [];
+  function buildPlane() {
+    for (const v of planeViews) { v.dispose(); v.group.removeFromParent(); }
+    for (const m of planeCasters) { m.geometry.dispose(); m.removeFromParent(); }
+    planeViews = []; planeCasters = [];
+    const before = casters.children.length;
+    for (let b = 0; b < nv; b++) for (let a = 0; a < nu;) {
+      if (open.has(b * nu + a)) { a++; continue; }
+      const a0 = a;
+      while (a < nu && !open.has(b * nu + a)) a++;
+      const s = cellBox(room, item.plane, a0 * cell, a * cell, b * cell, (b + 1) * cell);
+      addCaster(s);
+      const v = createSolidView(s, { invalidate: stage.invalidate, castShadow: false });
+      if (item.plane === 'roof') s.faces.forEach((f, fid) => v.setFaceState(fid, 'ghost'));
+      stage.content.add(v.group);
+      planeViews.push(v);
+    }
+    planeCasters = casters.children.slice(before);
+    stage.invalidate();
+  }
+
+  // the sun, at the moment being looked at
+  const c = new THREE.Vector3(W / 2, D / 2, 0), R = Math.max(5, Math.hypot(W, D, H) * .9);
+  const disc = new THREE.Mesh(new THREE.SphereGeometry(.22, 20, 12), new THREE.MeshBasicMaterial({ color: SIGNAL }));
+  disc.userData.noFrame = true;
+  stage.content.add(disc);
+
+  // the card: the floor plan, the marks and the patches; the plane folded out
+  const { board, body } = openCard('Plan', `${PLANE_NAMES[item.plane]} folded out`, { interactive: true });
+  const fold = foldOut(room, item.plane), [pu, pv] = PLANES[item.plane].size(room);
+  const corners = [fold(0, 0), fold(pu, 0), fold(pu, pv), fold(0, pv)];
+  const xs = [0, W, ...corners.map(p => p[0])], ys = [0, D, ...corners.map(p => p[1])];
+  const sheet = [[Math.floor(Math.min(...xs) - .5), Math.floor(Math.min(...ys) - .5)], [Math.ceil(Math.max(...xs) + .5), Math.ceil(Math.max(...ys) + .5)]];
+  board.setGrid('dots', { x0: sheet[0][0], y0: sheet[0][1], x1: sheet[1][0], y1: sheet[1][1] });
+  board.polygon(rect([sheet[0][0], sheet[0][1], sheet[1][0], sheet[1][1]]), { id: 'site', fill: 'none', stroke: null, hit: false });
+  goals.forEach((g, i) => {
+    const loops = g.rect ? [rect(g.rect)] : outlineOf(g.target, { tol: .04 });
+    loops.forEach((p, k) => board.polygon(p, { id: `tg${i}-${k}`, fill: 'rgba(255, 90, 31, .08)', stroke: 'signalFold', hit: false }));
+    const all = loops.flat(), mid = [all.reduce((a, p) => a + p[0], 0) / all.length, all.reduce((a, p) => a + p[1], 0) / all.length];
+    board.text(mid, goals.length > 1 ? clock(g.hour) : g.name, { id: 'tgl' + i, signal: true, noFit: true });
+  });
+  [[[0, 0], [W, 0]], [[W, 0], [W, D]], [[W, D], [0, D]], [[0, D], [0, 0]]].forEach(([a, b], i) => board.line(a, b, 'profile', { id: 'wl' + i, hit: false }));
+  // the plane's eaves, dashed where they hang over it
+  for (const [ex, ey, ez, ew, ed, eh] of item.eaves || []) if (item.plane === 'south') board.line(fold(ex, ez), fold(ex + ew, ez), 'hidden', { id: 'eave', hit: false });
+  // the plane's name: under a folded wall's top, or over the roof (east and west walls: past their north end)
+  board.text(item.plane === 'east' || item.plane === 'west' ? fold(pu + .35, pv / 2) : fold(pu / 2, pv + .35), PLANE_NAMES[item.plane], { id: 'pln', noFit: true });
+  drawNorth(board, sheet);
+  const cellPoly = k => { const a = k % nu, b = Math.floor(k / nu); return [fold(a * cell, b * cell), fold((a + 1) * cell, b * cell), fold((a + 1) * cell, (b + 1) * cell), fold(a * cell, (b + 1) * cell)]; };
+
+  // the moments, if more than one: which one the model shows
+  const ctl = document.createElement('div');
+  ctl.className = 'ss-ctl';
+  ctl.innerHTML = `<div class="ss-read"><span class="ss-clock"></span><span class="ss-match"></span></div>
+    ${moments.length > 1 ? `<div class="ss-seasons">${moments.map((m, i) => `<button type="button" class="ss-season" data-m="${i}">${m.keep ? 'Keep out · ' : ''}${momentName(m)}</button>`).join('')}</div>` : `<div class="ss-ends"><span>${momentName(moments[0])}</span></div>`}`;
+  body.append(ctl);
+
+  function drawCard() {
+    clearRuns(board, 'lt'); clearRuns(board, 'lk');
+    goals.forEach((g, i) => shadeRuns(board, litMask(g.map, open), `lt${i}-`, NOW));
+    avoid.forEach((a, i) => shadeRuns(board, litMask(a.map, open), `lk${i}-`, 'rgba(255, 90, 31, .7)'));
+    for (let k = 0; k < nu * nv; k++) board.polygon(cellPoly(k), { id: 'cl' + k, fill: open.has(k) ? 'rgba(255, 214, 170, .9)' : 'rgba(233, 230, 223, .1)', stroke: open.has(k) ? 'signalThin' : 'visible', hit: false });
+  }
+  function show() {
+    const m = moments[shown], s = sunDir(LAT, m.season, m.hour);
+    stage.setSun(s);
+    disc.position.set(c.x + s[0] * R, c.y + s[1] * R, s[2] * R);
+    ctl.querySelectorAll('.ss-season').forEach(b => b.classList.toggle('is-on', +b.dataset.m === shown));
+    stage.invalidate();
+  }
+  function update() {
+    cover = goals.map(g => coverOf(g.map, g.target, open));
+    leaks = avoid.map(a => litMask(a.map, open).bits.reduce((x, y) => x + y, 0));
+    buildPlane(); drawCard(); show();
+    const over = open.size > budget, low = Math.min(...cover);
+    ctl.querySelector('.ss-clock').innerHTML = `${open.size} <em>of ${budget} openings</em>`;
+    const mt = ctl.querySelector('.ss-match');
+    mt.textContent = over ? 'too many openings' : leaks.some(n => n > 0) ? 'the summer sun gets in' : goals.length > 1 ? `marks ${Math.round(low * 100)}% lit` : `${goals[0].name} ${Math.round(low * 100)}% lit`;
+    mt.classList.toggle('is-near', over || leaks.some(n => n > 0) || low >= NEED);
+    frame.tool('undo', { off: !history.length || done });
+    frame.tool('clear', { off: !open.size || done });
+    if (!done && ok()) { done = true; sfx.thud?.(); session.check(); }
+  }
+  const ok = () => open.size <= budget && cover.every(v => v >= NEED - 1e-9) && leaks.every(n => n === 0);
+  function toggle(k) {
+    if (done) return;
+    if (open.has(k)) open.delete(k); else open.add(k);
+    history.push(k); sfx.tick?.(); navigator.vibrate?.(6);
+    update();
+  }
+  const off = board.onPointer({
+    up(ev, p) {
+      for (let k = 0; k < nu * nv; k++) if (inPoly(cellPoly(k), p[0], p[1])) { toggle(k); return; }
+    },
+  });
+  ctl.querySelector('.ss-seasons')?.addEventListener('click', ev => { const b = ev.target.closest('.ss-season'); if (!b) return; shown = +b.dataset.m; sfx.tick?.(); show(); });
+  function undo() { if (done || !history.length) return; const k = history.pop(); if (open.has(k)) open.delete(k); else open.add(k); update(); }
+  function clear() { if (done) return; open.clear(); history.length = 0; update(); }
+
+  board.fit();
+  frame.fitSheet(board, { lo: .3, hi: .48 });
+  const first = goals[0];
+  frame.title('Can you let the light in?', item.name);
+  frame.sub(goals.length > 1
+    ? `One opening, two marks: the sun must fall on each at its own hour. Tap cells of the ${PLANE_NAMES[item.plane]}, folded out beside the plan, to open them.`
+    : `The sun must fall on the ${first.name} at ${clock(first.hour)}, ${SEASON_NAMES[first.season].toLowerCase()}${avoid.length ? ', and stay out of the room at midsummer noon' : ''}. Tap cells of the ${PLANE_NAMES[item.plane]}, folded out beside the plan, to open them, ${budget} at most.`);
+  frame.tools([
+    { id: 'undo', label: 'Undo', key: 'Z', keys: ['Ctrl+Z'], run: undo },
+    { id: 'clear', label: 'Clear', key: 'X', run: clear, spare: true },
+    { id: 'hint', label: 'Hint', key: 'H', run: () => session.hint() },
+  ]);
+  frame.primaryEl.style.display = 'none';
+  update();
+
+  return {
+    kind: 'light',
+    get star() { return open.size <= best.length; },
+    best, budget,
+    check: () => ok() ? { ok: true } : { ok: false, note: 'The mark is not lit yet.' },
+    hint(n) {
+      const s = sunDir(LAT, first.season, first.hour), up = altitude(s), k = 1 / Math.tan(up * D2R);
+      if (n === 1) return { text: item.plane === 'roof'
+        ? `At ${clock(first.hour)} the sun is ${Math.round(up)}° up, so light through the roof lands ${(k * H).toFixed(1)} modules away from the sun. Find the mark, and look back toward the sun from it.`
+        : `At ${clock(first.hour)} the sun is ${Math.round(up)}° up: light through a cell one module up the wall lands ${k.toFixed(1)} modules into the room. The higher the cell, the deeper its patch.` };
+      if (n === 2) {
+        const k0 = best.find(c => !open.has(c));
+        if (k0 !== undefined) toggle(k0);
+        return { text: 'One of the cells you need is open now. Its patch shows where its neighbours’ light will fall.' };
+      }
+      session.peek();
+      open.clear(); best.forEach(c => open.add(c)); update();
+      return { text: 'These are the fewest cells that light the mark.' };
+    },
+    async solved() {
+      done = true;
+      // the model shows each moment in turn
+      for (let i = 0; i < moments.length; i++) { shown = i; show(); await wait(moments.length > 1 ? 700 : 1200, { essential: true }); }
+    },
+    dispose() {
+      off();
+      for (const v of [...seen, ...planeViews]) { v.dispose(); v.group.removeFromParent(); }
+      casters.children.forEach(m => m.geometry.dispose()); casters.removeFromParent(); shadowMat.dispose();
+      disc.geometry.dispose(); disc.material.dispose(); disc.removeFromParent();
+      closeCard();
+      frame.primaryEl.style.display = '';
+    },
+  };
+}
+
+// ------------------------------------------------------------------
 // the game definition
 // ------------------------------------------------------------------
 
 let task = null;
-const TASKS = { cast: castTask, hour: hourTask, fence: fenceTask };
+const TASKS = { cast: castTask, hour: hourTask, fence: fenceTask, light: lightTask };
 function reset() { task?.dispose(); task = null; red.clear(); labels.clear(); stage.clear(); }
 function load(item) { reset(); task = TASKS[item.task](item); }
 
@@ -671,14 +915,20 @@ function generate(rng, d) {
 const def = {
   id: 'sunstudy', prefix: 'L', name: 'Sun Study',
   lead: 'Move the sun, read the shadow.',
-  sub: 'Draw a shadow the way architects learn to, find the hour and season a shadow plan was drawn for, and build as high as the neighbours’ sun allows, under the real sun over Istanbul.',
+  sub: 'Draw a shadow the way architects learn to, find the hour and season a shadow plan was drawn for, build as high as the neighbours’ sun allows, and cut the openings that let it into a room, under the real sun over Istanbul.',
   packs,
   load,
   check: () => task.check(),
   hint: n => task.hint(n),
   onSolved: () => task.solved?.(),
   generate,
-  master: { name: 'clean build', says: 'built it without ever shading a garden', applies: it => it.task === 'fence', test: () => task?.clean },
+  // the star: a clean build (fence), or the fewest openings (light)
+  master: {
+    get name() { return task?.kind === 'light' ? 'fewest openings' : 'clean build'; },
+    get says() { return task?.kind === 'light' ? 'lit the mark with the fewest openings' : 'built it without ever shading a garden'; },
+    applies: it => it.task === 'fence' || it.task === 'light',
+    test: () => task?.kind === 'light' ? task.star : task?.clean,
+  },
   modes: ['challenge', 'daily'],
   dailyDifficulty: 3,
 };
