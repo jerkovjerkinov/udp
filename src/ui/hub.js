@@ -141,7 +141,7 @@ export function createHub(root) {
 
   root.innerHTML = `<div class="udp-hub">
     <div class="udp-hub-top">
-      <div><nav class="udp-brand"><span class="udp-long">Unnamed Drawing Project</span><span class="udp-sep">·</span><span>Index of sheets</span></nav>
+      <div><nav class="udp-brand"><span class="udp-long">Unnamed Drawing Project</span><span class="udp-sep udp-long">·</span><span>Index of sheets</span></nav>
         <h1 class="udp-hub-title">Eight drawings to think in.<b>Unnamed Drawing Project</b></h1>
         <p class="udp-hub-sub">Spatial puzzles for architects: nets, elevations, roofs, pop-ups, the order things are built in and the views a figure is painted for. Every sheet asks you to see a form before you touch it.</p></div>
       <a class="udp-hub-daily" href="games/${daily}/index.html#daily=${date}">
@@ -160,51 +160,64 @@ export function createHub(root) {
   </div>`;
 
   // ------------------------------------------------------------------
-  // one renderer, a scissor rect per card
+  // one renderer, drawn off screen and copied into each card's own canvas, so
+  // a model scrolls with its card instead of being chased by a fixed layer
   // ------------------------------------------------------------------
 
-  const canvas = document.createElement('canvas');
-  canvas.className = 'udp-hub-canvas';
-  document.body.prepend(canvas);
   let renderer;
-  try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true }); } catch (e) { return; }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  try { renderer = new THREE.WebGLRenderer({ canvas: document.createElement('canvas'), antialias: true, alpha: true }); } catch (e) { return; }
   renderer.setClearColor(0x000000, 0);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
-  renderer.autoClear = false;
 
-  const cards = [...root.querySelectorAll('[data-model]')].map(el => ({ el, id: el.dataset.model, ...cardScene(el.dataset.model), spin: 0 }));
+  const cards = [...root.querySelectorAll('[data-model]')].map(el => {
+    const cv = document.createElement('canvas');
+    cv.className = 'udp-gcard-canvas';
+    el.append(cv);
+    return { el, cv, ctx: cv.getContext('2d'), id: el.dataset.model, ...cardScene(el.dataset.model), spin: 0, w: 0, h: 0 };
+  });
+  const dirty = new Set();
   let queued = false;
   const draw = () => {
     queued = false;
-    const W = window.innerWidth, H = window.innerHeight;
-    renderer.setSize(W, H, false);
-    renderer.setScissorTest(false);
-    renderer.clear();
-    renderer.setScissorTest(true);
-    for (const c of cards) {
-      const r = c.el.getBoundingClientRect();
-      if (r.bottom < 0 || r.top > H || r.width < 2) continue;
-      const aspect = r.width / r.height, R = c.radius * 1.12;
-      const halfH = Math.max(R, R / aspect);
-      c.cam.left = -halfH * aspect; c.cam.right = halfH * aspect; c.cam.top = halfH; c.cam.bottom = -halfH;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const todo = [...dirty]; dirty.clear();
+    for (const c of todo) { c.w = c.el.clientWidth; c.h = c.el.clientHeight; }
+    const live = todo.filter(c => c.w >= 2 && c.h >= 2);
+    if (!live.length) return;
+    // the renderer big enough for the largest card; each card uses its corner
+    const MW = Math.max(...live.map(c => c.w)), MH = Math.max(...live.map(c => c.h));
+    renderer.setPixelRatio(dpr);
+    const have = renderer.getSize(new THREE.Vector2());
+    if (have.x < MW || have.y < MH) renderer.setSize(Math.max(MW, have.x), Math.max(MH, have.y), false);
+    const full = renderer.getSize(new THREE.Vector2());
+    for (const c of live) {
+      // the low sun throws shadows to the right: the window sits a little right
+      // of the model, so model and shadow together are centred and uncut
+      const aspect = c.w / c.h, R = c.radius * 1.12, sh = R * .28;
+      const halfH = Math.max(R, (R + sh) / aspect);
+      c.cam.left = -halfH * aspect + sh; c.cam.right = halfH * aspect + sh; c.cam.top = halfH; c.cam.bottom = -halfH;
       const yaw = c.yaw + c.spin;
       c.cam.position.set(Math.cos(c.pitch) * Math.cos(yaw), Math.cos(c.pitch) * Math.sin(yaw), Math.sin(c.pitch)).multiplyScalar(40);
       c.cam.position.z += c.radius * .45;
       c.cam.lookAt(0, 0, c.radius * .45);
       c.cam.updateProjectionMatrix();
-      syncLines(c.scene, r.height / (2 * halfH));
-      renderer.setViewport(r.left, H - r.bottom, r.width, r.height);
-      renderer.setScissor(r.left, H - r.bottom, r.width, r.height);
+      syncLines(c.scene, c.h / (2 * halfH));
+      renderer.setViewport(0, 0, c.w, c.h);
+      renderer.setScissor(0, 0, c.w, c.h);
+      renderer.setScissorTest(true);
+      renderer.clear();
       renderer.render(c.scene, c.cam);
+      const pw = Math.round(c.w * dpr), ph = Math.round(c.h * dpr);
+      if (c.cv.width !== pw || c.cv.height !== ph) { c.cv.width = pw; c.cv.height = ph; }
+      c.ctx.clearRect(0, 0, pw, ph);
+      c.ctx.drawImage(renderer.domElement, 0, Math.round(full.y * dpr) - ph, pw, ph, 0, 0, pw, ph);
     }
   };
-  const queue = () => { if (!queued) { queued = true; requestAnimationFrame(draw); } };
-  window.addEventListener('scroll', queue, { passive: true });
-  window.addEventListener('resize', queue);
-  new ResizeObserver(queue).observe(root);
-  document.fonts?.ready.then(queue);
+  const queue = c => { for (const x of c ? [c] : cards) dirty.add(x); if (!queued) { queued = true; requestAnimationFrame(draw); } };
+  window.addEventListener('resize', () => queue());
+  new ResizeObserver(() => queue()).observe(root);
+  document.fonts?.ready.then(() => queue());
   queue();
 
   // a slow half turn while the pointer rests on a card
@@ -215,7 +228,7 @@ export function createHub(root) {
       tw?.cancel();
       if (reducedMotion()) return;
       const from = c.spin;
-      tw = animate({ duration: 1600, ease: ease.cubicInOut, update: v => { c.spin = from + (to - from) * v; queue(); } });
+      tw = animate({ duration: 1600, ease: ease.cubicInOut, update: v => { c.spin = from + (to - from) * v; queue(c); } });
     };
     card.addEventListener('pointerenter', () => turn(Math.PI / 4));
     card.addEventListener('pointerleave', () => turn(0));
