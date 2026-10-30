@@ -66,6 +66,18 @@ export function packStates(p, packs, { allOpen = ALL_OPEN } = {}) {
   return out;
 }
 
+// the level after this one, in order across the packs, if its pack is open;
+// past the last level (or into a closed pack), the next unsolved one
+export function levelAfter(p, packs, id) {
+  const st = packStates(p, packs);
+  const all = packs.flatMap((pk, i) => pk.levels.map(l => ({ pack: pk, id: l.id, open: st[i].open })));
+  const k = all.findIndex(l => l.id === id);
+  const after = k >= 0 ? all[k + 1] : null;
+  if (after?.open) return { pack: after.pack, id: after.id };
+  const nxt = nextLevel(p, packs);
+  return nxt && nxt.id !== id ? nxt : null;
+}
+
 // the level to play next: the first unsolved level of the first open pack that has one
 export function nextLevel(p, packs) {
   const st = packStates(p, packs);

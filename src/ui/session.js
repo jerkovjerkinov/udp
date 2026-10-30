@@ -35,7 +35,7 @@ import { clock, esc } from './frame.js';
 import { titleBlock } from './titleblock.js';
 import { createLevelMap, sheetNo } from './levelmap.js';
 import { parseHash, formatHash, newSeed, shareLine, copyText } from './share.js';
-import { loadProgress, saveProgress, recordLevel, marksOf, nextLevel, packStates, ALL_OPEN,
+import { loadProgress, saveProgress, recordLevel, marksOf, nextLevel, levelAfter, packStates, ALL_OPEN,
   loadSuite, saveSuite, today, recordDaily, currentStreak } from './progress.js';
 import { seededRng } from '../core/rand.js';
 
@@ -366,7 +366,8 @@ export function createSession({ def, frame, stage, redlines }) {
       frame.status({ marks: record.marks, fresh, star: star === undefined ? undefined : !!record.star });
       const f = findLevel(item.id);
       const st = packStates(progress, def.packs).find(s => s.id === f.pack.id);
-      const nxt = nextLevel(progress, def.packs);
+      // the sheet after this one, not back to the first unsolved
+      const nxt = levelAfter(progress, def.packs, item.id);
       const lastInPack = f.i === f.pack.levels.length - 1;
       summary({
         headline: `<b>Drawn.</b> ${esc(item.name)}`,
